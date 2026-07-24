@@ -1,0 +1,16 @@
+interface:
+  display_name: "Viral Replica Improver"
+  short_description: "Outer-loop SkillOps improver for viral-replica-loop evidence, feedback, and safe skill evolution."
+  default_prompt: "Use $viral-replica-improver to inspect loop evidence, classify repeated failures, generate improvement proposals, and prepare reviewed patches for $viral-replica, $video-replication, workers, gates, or evals."
+  primary_outputs:
+    - "improvement proposal"
+    - "evidence paths"
+    - "failure classification"
+    - "eval case suggestion"
+    - "verification command"
+  exclusions:
+    - "advancing jobs"
+    - "submitting Seedance generation"
+    - "repairing images"
+    - "rewriting craft rules without evidence"
+    - "source writes from scheduled report-only runs"

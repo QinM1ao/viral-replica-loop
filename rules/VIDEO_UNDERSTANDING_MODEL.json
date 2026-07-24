@@ -1,0 +1,10 @@
+{
+  "provider": "wujie_higress",
+  "base_url": "https://higress-api.wujieai.com/v1",
+  "endpoint": "/chat/completions",
+  "protocol": "openai-chat-completions",
+  "model": "doubao-seed-2-0-mini-260215",
+  "fps": 2,
+  "max_inline_video_bytes": 45000000,
+  "timeout_seconds": 600
+}

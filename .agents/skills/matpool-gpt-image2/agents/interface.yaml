@@ -1,0 +1,28 @@
+name: matpool-gpt-image2
+inputs:
+  prompt_file:
+    type: path
+    required: true
+  refs:
+    type: path[]
+    required: true
+  output_file:
+    type: path
+    required: true
+  size:
+    type: string
+    required: false
+    default: "1024x1024"
+  quality:
+    type: string
+    required: false
+    default: high
+outputs:
+  image_file:
+    type: path
+  route:
+    type: string
+    const: matpool_gpt_image_2_edit
+constraints:
+  - MATPOOL_API_KEY must be supplied through the environment or private local config.
+  - Do not try any deprecated GPT Image route or gateway probe.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "视频复刻"
+  short_description: "拆解参考视频并生成Seedance复刻成片。"
+  default_prompt: "使用 $video-replication 复刻这个视频，保留原片节奏和内容，处理好人物、产品、声音、无字幕和交付对比页。"

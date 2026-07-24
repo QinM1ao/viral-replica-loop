@@ -1,0 +1,147 @@
+{
+  "version": 1,
+  "job_id": "job-008",
+  "product_name": "孔凤春清洁泥膜",
+  "brand_id": "kongfengchun",
+  "category_id": "clay_mask",
+  "sku_id": "kongfengchun_clean_mud_mask",
+  "classification": {
+    "category_confidence": 0.95,
+    "category_reason": "matched_clay_mask_terms",
+    "brand_source": "client_profile_or_product_name"
+  },
+  "loaded_rules": [
+    "generic:generic_product",
+    "category:clay_mask",
+    "brand:kongfengchun",
+    "sku:kongfengchun_clean_mud_mask"
+  ],
+  "forbidden_rules": [],
+  "skipped_rules": [],
+  "reference_roles": {
+    "required": [
+      "source_storyboard",
+      "product_front",
+      "identity_ref",
+      "product_open_mud"
+    ],
+    "optional": [
+      "afterwash_face"
+    ],
+    "order_prefix": [
+      "source_storyboard",
+      "product_front",
+      "product_open_mud",
+      "identity_ref"
+    ]
+  },
+  "review_flags": {
+    "required": [
+      "layout_matches_source",
+      "source_aspect_preserved",
+      "source_scene_preserved",
+      "no_identity_reference_background",
+      "no_product_reference_background",
+      "same_identity_as_reference",
+      "primary_identity_consistent",
+      "primary_identity_only_on_target_role",
+      "secondary_characters_keep_source_role_gender",
+      "no_source_host_identity",
+      "target_product_packaging",
+      "target_product_label",
+      "no_old_product",
+      "no_subtitles_or_text",
+      "white_milky_thick_mud",
+      "finger_or_fingertip_application",
+      "no_tube_stick_brush_cotton_swatch",
+      "no_arm_swatch"
+    ]
+  },
+  "checks": {
+    "requires_product_consistency": true,
+    "requires_afterwash_ref": true,
+    "requires_mud_checks": true,
+    "requires_skincare_progression": true,
+    "requires_finger_jar_application": true,
+    "requires_brand_label_consistency": true
+  },
+  "prompt_required_groups": [
+    {
+      "name": "target_product",
+      "patterns": [
+        "孔凤春",
+        "清洁泥膜",
+        "泥膜",
+        "Kongfengchun",
+        "clay mask",
+        "孔凤春清洁泥膜"
+      ]
+    },
+    {
+      "name": "finger_application",
+      "patterns": [
+        "手指",
+        "指腹",
+        "\\bfinger\\b",
+        "\\bfingertip\\b",
+        "\\bfingertips\\b"
+      ]
+    },
+    {
+      "name": "open_jar",
+      "patterns": [
+        "罐",
+        "\\bjar\\b"
+      ]
+    },
+    {
+      "name": "white_thick_mud",
+      "patterns": [
+        "乳白",
+        "奶白",
+        "白色厚泥",
+        "白泥",
+        "milky[- ]white",
+        "white thick"
+      ]
+    }
+  ],
+  "visible_text_patterns": [],
+  "character_policy": {
+    "primary_identity_scope": "approved identity applies only to the source-defined product host or protagonist role",
+    "secondary_character_rule": "preserve each secondary character's story role and gender; replace or de-identify them as generic context identities, and never turn them into the primary approved identity"
+  },
+  "tool_risk_translation_groups": [
+    {
+      "name": "finger_application",
+      "patterns": [
+        "手指",
+        "指腹",
+        "\\bfinger\\b",
+        "\\bfingertip\\b"
+      ]
+    },
+    {
+      "name": "open_jar",
+      "patterns": [
+        "罐",
+        "\\bjar\\b"
+      ]
+    }
+  ],
+  "source_storyboard_controls": [
+    "layout",
+    "shot_order",
+    "framing",
+    "action_rhythm",
+    "scene_family"
+  ],
+  "source_storyboard_must_not_control": [
+    "old_product",
+    "old_tool",
+    "old_host_identity",
+    "old_mud_color",
+    "subtitles"
+  ],
+  "usage_action": "show the Kongfengchun cleansing mud mask jar, open milky-white thick paste, finger pickup, and fingertip face application"
+}

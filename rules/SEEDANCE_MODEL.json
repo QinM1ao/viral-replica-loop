@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "model_name": "Seedance 2.0",
+  "model": "ep-20260521101914-nwv8j",
+  "request_field": "model",
+  "task_code": 2509,
+  "endpoint": "task_create",
+  "ratio": "9:16",
+  "duration_seconds_per_part": 15,
+  "resolution": "720p",
+  "generate_audio": true,
+  "selection_policy": {
+    "default_when_unspecified": "Seedance 2.0",
+    "exact_user_terms": {
+      "Seedance 2.0": "ep-20260521101914-nwv8j",
+      "Seedance 2.0 mini": "ep-20260625155850-zpss5",
+      "Seedance 2.0 Fast": "ep-20260521101842-4q4lc"
+    },
+    "rule": "An explicit user model name overrides the default without reinterpretation."
+  },
+  "updated_at": "2026-07-10",
+  "change_scope": "Model selection changes only the Seedance EP; the rest of the loop stays unchanged."
+}

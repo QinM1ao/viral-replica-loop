@@ -1,0 +1,284 @@
+{
+  "version": 1,
+  "terminal_statuses": [
+    "done",
+    "blocked"
+  ],
+  "paid_stage_markers": [
+    "generation_approved",
+    "seedance_generating",
+    "seedance_generate",
+    "submit_generation",
+    "paid"
+  ],
+  "rules": [
+    {
+      "id": "pending_story_analysis",
+      "match": {
+        "type": "exact",
+        "status": "pending"
+      },
+      "decision": "continue",
+      "canonical_stage": "story_analysis",
+      "cost_class": "free_check",
+      "worker": "$video-replication story analysis + $viral-replica loop adapter",
+      "worker_file": "workers/story_analysis_worker.md",
+      "script_file": "tools/prepare_story_analysis.py",
+      "action": "Run source-video story analysis: ASR, subtitle layer, visual timeline, narrative skeleton, and contamination risks.",
+      "next_expected": "story_analyzed",
+      "gate": "gates/story_analysis_gate.md"
+    },
+    {
+      "id": "story_analyzed",
+      "match": {
+        "type": "exact",
+        "status": "story_analyzed"
+      },
+      "decision": "continue",
+      "canonical_stage": "storyboard",
+      "cost_class": "free_check",
+      "worker": "$video-replication storyboard + $viral-replica loop adapter",
+      "worker_file": "workers/storyboard_worker.md",
+      "action": "Build a source-aligned storyboard, seam notes, contamination audit, and product action remapping from the passed story analysis.",
+      "next_expected": "storyboard_passed",
+      "gate": "gates/storyboard_gate.md"
+    },
+    {
+      "id": "storyboard_passed",
+      "match": {
+        "type": "exact",
+        "status": "storyboard_passed"
+      },
+      "decision": "continue",
+      "canonical_stage": "image_batch_qc",
+      "cost_class": "cheap_quality_work",
+      "worker": "$video-replication image batch / fast repair + $viral-replica loop adapter",
+      "worker_file": "workers/image_batch_worker.md",
+      "script_file": "tools/image_hard_gate_qc.py",
+      "action": "Directly batch-edit every required Part storyboard image from the passed storyboard set through the project GPT Image route. For a 45s job, generate Part1/Part2/Part3 together in one image-batch round; do not create a separate image sample or wait for sample review unless the job explicitly requests a sample stop. Write and pass GPT Image contract QC, hard image QC, visual asset manifest QC, storyboard geometry / API-effect QC, cross-Part continuity QC, and skincare progression QC where required, then promote only passed images.",
+      "next_expected": "image_qc_passed",
+      "gate": "gates/image_batch_gate.md"
+    },
+    {
+      "id": "sample_image_waiting_review",
+      "match": {
+        "type": "prefix",
+        "status": "sample_image_waiting_review"
+      },
+      "decision": "stop",
+      "reason": "Image sample waits in normal mode; self-audit checker can approve internally",
+      "canonical_stage": "image_sample_review",
+      "cost_class": "free_check",
+      "worker": "human",
+      "worker_file": "workers/manual_review_worker.md",
+      "script_file": "tools/image_hard_gate_qc.py",
+      "action": "In normal mode, stop for image sample review. In self-audit mode, run the independent checker and continue without user confirmation when the gate passes.",
+      "next_expected": "image_sample_approved",
+      "gate": "gates/image_sample_review_gate.md",
+      "self_audit": {
+        "allowed": true,
+        "worker": "$video-replication checker image sample review + $viral-replica loop adapter",
+        "worker_file": "workers/checker_worker.md",
+        "script_file": "tools/checker_review_qc.py",
+        "checker_agent": ".codex/agents/viral-replica-checker.toml",
+        "action": "Run the independent checker against the legacy image sample review gate and require passing visual asset manifest QC plus GPT Image contract QC. If the checker returns PASS, record the gate and continue without client taste review unless the user configured this stage as a stop point."
+      }
+    },
+    {
+      "id": "image_sample_approved",
+      "match": {
+        "type": "exact",
+        "status": "image_sample_approved"
+      },
+      "decision": "continue",
+      "canonical_stage": "image_batch_qc",
+      "cost_class": "cheap_quality_work",
+      "worker": "$video-replication image batch / fast repair + $viral-replica loop adapter",
+      "worker_file": "workers/image_batch_worker.md",
+      "script_file": "tools/image_hard_gate_qc.py",
+      "action": "Generate or fast-repair all required current-job AI改好分镜图 storyboard images through the project GPT Image route, write and pass GPT Image contract QC, run hard image QC, update the approved visual manifest, run visual asset manifest QC, run storyboard geometry / API-effect QC against the job-002 edit baseline, run cross-Part continuity QC for multi-Part jobs, and promote only passed images.",
+      "next_expected": "image_qc_passed",
+      "gate": "gates/image_batch_gate.md"
+    },
+    {
+      "id": "image_qc_passed",
+      "match": {
+        "type": "exact",
+        "status": "image_qc_passed"
+      },
+      "decision": "continue",
+      "canonical_stage": "voiceover",
+      "cost_class": "free_check",
+      "worker": "$video-replication voiceover + $viral-replica loop adapter",
+      "worker_file": "workers/voiceover_worker.md",
+      "action": "Rewrite voiceover from source ASR, subtitle layer, and approved storyboard images, binding lines to shots.",
+      "next_expected": "voiceover_done",
+      "gate": "gates/voiceover_gate.md"
+    },
+    {
+      "id": "voiceover_done",
+      "match": {
+        "type": "exact",
+        "status": "voiceover_done"
+      },
+      "decision": "continue",
+      "canonical_stage": "seam",
+      "cost_class": "free_check",
+      "worker": "$video-replication seam + $viral-replica loop adapter",
+      "worker_file": "workers/seam_worker.md",
+      "action": "Write multi-part seam design: ending state, next-part motion start, speech boundary, and no-freeze plan.",
+      "next_expected": "seam_done",
+      "gate": "gates/seam_gate.md"
+    },
+    {
+      "id": "seam_done",
+      "match": {
+        "type": "exact",
+        "status": "seam_done"
+      },
+      "decision": "continue",
+      "canonical_stage": "seedance_prompt",
+      "cost_class": "free_check",
+      "worker": "$video-replication Seedance prompt + $viral-replica loop adapter",
+      "worker_file": "workers/seedance_prompt_worker.md",
+      "action": "Build clean Seedance prompts and material-role table only from approved visual manifest assets, shot rhythm, voiceover, and seam design; require passing visual asset manifest QC, storyboard geometry / API-effect QC, and cross-Part continuity QC before PASS.",
+      "next_expected": "seedance_prompt_done",
+      "gate": "gates/seedance_prompt_gate.md"
+    },
+    {
+      "id": "seedance_prompt_done",
+      "match": {
+        "type": "exact",
+        "status": "seedance_prompt_done"
+      },
+      "decision": "continue",
+      "canonical_stage": "audio_boundary_qc",
+      "cost_class": "free_check",
+      "worker": "$video-replication audio boundary + $viral-replica loop adapter",
+      "worker_file": "workers/audio_boundary_worker.md",
+      "script_file": "tools/asr_transcribe.py",
+      "action": "For sound-enabled jobs, cut reference audio by sentence boundary and run ASR boundary QC. For silent jobs, write a skip note.",
+      "next_expected": "audio_boundary_qc_done",
+      "gate": "gates/audio_boundary_gate.md"
+    },
+    {
+      "id": "audio_boundary_qc_done",
+      "match": {
+        "type": "exact",
+        "status": "audio_boundary_qc_done"
+      },
+      "decision": "continue",
+      "canonical_stage": "request_qc",
+      "cost_class": "free_check",
+      "worker": "$video-replication request build + $viral-replica loop adapter",
+      "worker_file": "workers/request_build_worker.md",
+      "script_file": "tools/request_body_qc.py",
+      "action": "Build and QC Seedance taskCode request bodies or web-side handoff. Verify public image/audio URLs or final upload files, taskCode, image order, visual asset manifest mapping, storyboard geometry / API-effect match, cross-Part continuity, and audio boundary mapping. Stop before paid or batch generation.",
+      "next_expected": "seedance_inputs_prepared",
+      "gate": "gates/request_gate.md"
+    },
+    {
+      "id": "seedance_inputs_prepared",
+      "match": {
+        "type": "prefix",
+        "status": "seedance_inputs_prepared"
+      },
+      "decision": "stop",
+      "reason": "Seedance generation requires explicit client approval",
+      "canonical_stage": "generation_approval",
+      "cost_class": "expensive_generation",
+      "worker": "human approval",
+      "worker_file": "workers/cost_approval_worker.md",
+      "action": "Stop before paid or batch Seedance generation.",
+      "next_expected": "generation_approved",
+      "gate": "gates/cost_approval_gate.md"
+    },
+    {
+      "id": "generation_approved",
+      "match": {
+        "type": "exact",
+        "status": "generation_approved"
+      },
+      "decision": "continue",
+      "canonical_stage": "generation",
+      "cost_class": "expensive_generation",
+      "worker": "$video-replication generation + $viral-replica loop adapter",
+      "worker_file": "workers/generation_worker.md",
+      "action": "Submit the approved Seedance request count, poll results, download part videos, and record generation logs.",
+      "next_expected": "final_qc",
+      "gate": "gates/generation_gate.md"
+    },
+    {
+      "id": "final_qc",
+      "match": {
+        "type": "prefix",
+        "status": "final_qc"
+      },
+      "decision": "continue",
+      "canonical_stage": "final_qc",
+      "cost_class": "free_check",
+      "worker": "$video-replication final technical QC + $viral-replica loop adapter",
+      "worker_file": "workers/final_qc_worker.md",
+      "script_file": "tools/final_video_qc.py",
+      "action": "Run objective final technical QC. If it passes, deliver the final video and mark the job done; subjective effect review belongs to the user after delivery. If it fails, allow at most one targeted Seedance retry.",
+      "next_expected": "done",
+      "gate": "gates/final_video_gate.md"
+    },
+    {
+      "id": "afterwash_ref_waiting_review",
+      "match": {
+        "type": "prefix",
+        "status": "afterwash_ref_waiting_review"
+      },
+      "decision": "stop",
+      "reason": "after-wash reference waits in normal mode; self-audit checker can approve internally",
+      "canonical_stage": "afterwash_reference_review",
+      "cost_class": "free_check",
+      "worker": "human",
+      "worker_file": "workers/manual_review_worker.md",
+      "action": "In normal mode, stop for after-wash reference review. In self-audit mode, run the independent checker and continue without user confirmation when the gate passes.",
+      "next_expected": "afterwash_ref_passed",
+      "gate": "gates/afterwash_reference_gate.md",
+      "self_audit": {
+        "allowed": true,
+        "worker": "$video-replication checker after-wash reference review + $viral-replica loop adapter",
+        "worker_file": "workers/checker_worker.md",
+        "script_file": "tools/checker_review_qc.py",
+        "checker_agent": ".codex/agents/viral-replica-checker.toml",
+        "action": "Run the independent checker against the after-wash reference gate. If the checker returns PASS, record the gate and continue unless the user configured this stage as a stop point."
+      }
+    },
+    {
+      "id": "done",
+      "match": {
+        "type": "exact",
+        "status": "done"
+      },
+      "decision": "stop",
+      "reason": "job is done",
+      "canonical_stage": "terminal",
+      "cost_class": "free_check",
+      "worker": "none",
+      "worker_file": "none",
+      "action": "No action.",
+      "next_expected": "done",
+      "gate": "none"
+    },
+    {
+      "id": "blocked",
+      "match": {
+        "type": "exact",
+        "status": "blocked"
+      },
+      "decision": "stop",
+      "reason": "job is blocked",
+      "canonical_stage": "terminal",
+      "cost_class": "free_check",
+      "worker": "none",
+      "worker_file": "none",
+      "action": "No action.",
+      "next_expected": "blocked",
+      "gate": "none"
+    }
+  ]
+}

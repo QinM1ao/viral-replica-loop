@@ -1,0 +1,2 @@
+id,status,video_path,product_name,client_profile,product_assets,person_assets,audio_assets,target_duration,notes,output_dir,last_artifact,next_stage,needs_user_confirmation
+job-001,pending,/absolute/path/to/source-video.mp4,Target Product,,/absolute/path/to/product-assets,/absolute/path/to/person-assets,extract_from_original,30s,close_replication_keep_source_rhythm,output/job-001,,story_analysis,false

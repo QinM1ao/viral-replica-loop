@@ -1,0 +1,19 @@
+interface:
+  display_name: "Video Replication"
+  short_description: "Craft method for source-aligned video replication with source-locked dialogue and Seedance-ready assets."
+  default_prompt: "Use $video-replication for source story analysis, source-locked dialogue, storyboard/image replacement including no-model multi-person identity derivation, compact Pre-Seedance packs, generation, and final QC."
+  primary_outputs:
+    - "story analysis"
+    - "storyboard and seam plan"
+    - "AI-edited storyboard images"
+    - "compact Pre-Seedance pack"
+    - "source-script fidelity audit"
+    - "role-bound storyboard-derived identity assets when no model is supplied"
+    - "voiceover and audio-boundary notes"
+    - "story-to-prompt shot-line map"
+    - "Seedance production brief"
+  exclusions:
+    - "queue selection"
+    - "jobs.csv mutation"
+    - "cost approval ownership"
+    - "loop state writeback"

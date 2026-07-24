@@ -1,0 +1,270 @@
+{
+  "overall": "PASS",
+  "checks": [
+    {
+      "name": "prompt_files_present",
+      "status": "PASS",
+      "detail": "count=2"
+    },
+    {
+      "name": "shot_line_map_readable",
+      "status": "PASS",
+      "detail": "examples/kongfengchun-reference-job-008/output/job-008/prompt_validation_source_speaker_20260706/shot_line_map.md"
+    }
+  ],
+  "shot_line_map": "examples/kongfengchun-reference-job-008/output/job-008/prompt_validation_source_speaker_20260706/shot_line_map.md",
+  "prompts": [
+    {
+      "path": "examples/kongfengchun-reference-job-008/output/job-008/seedance_web_final/prompts/Part1_Seedance提示词.txt",
+      "part": 1,
+      "overall": "PASS",
+      "checks": [
+        {
+          "name": "part1_has_参考图角色",
+          "status": "PASS",
+          "detail": "`参考图角色` found"
+        },
+        {
+          "name": "part1_has_@图片1",
+          "status": "PASS",
+          "detail": "`@图片1` found"
+        },
+        {
+          "name": "part1_has_@图片2",
+          "status": "PASS",
+          "detail": "`@图片2` found"
+        },
+        {
+          "name": "part1_has_主目标",
+          "status": "PASS",
+          "detail": "`主目标` found"
+        },
+        {
+          "name": "part1_has_次目标",
+          "status": "PASS",
+          "detail": "`次目标` found"
+        },
+        {
+          "name": "part1_has_简化",
+          "status": "PASS",
+          "detail": "`简化` found"
+        },
+        {
+          "name": "part1_has_禁止BGM",
+          "status": "PASS",
+          "detail": "`禁止BGM` found"
+        },
+        {
+          "name": "part1_three_shots",
+          "status": "PASS",
+          "detail": "shots=[1, 2, 3]"
+        },
+        {
+          "name": "part1_variable_time_axis",
+          "status": "PASS",
+          "detail": "unique_ranges=10, required>=7"
+        },
+        {
+          "name": "part1_shot1_has_internal_timing",
+          "status": "PASS",
+          "detail": "ranges=['0.0-5.4s', '0.0-1.8s', '1.8-3.6s', '3.6-5.4s']"
+        },
+        {
+          "name": "part1_shot2_has_internal_timing",
+          "status": "PASS",
+          "detail": "ranges=['5.4-9.8s', '5.4-7.4s', '7.4-9.8s']"
+        },
+        {
+          "name": "part1_shot3_has_internal_timing",
+          "status": "PASS",
+          "detail": "ranges=['9.8-15.0s', '9.8-12.2s', '12.2-15.0s']"
+        },
+        {
+          "name": "part1_covers_shot_line_map_times",
+          "status": "PASS",
+          "detail": "all map target ranges are present"
+        },
+        {
+          "name": "part1_source_speaker_modes_present",
+          "status": "PASS",
+          "detail": "all rows include source speaker mode"
+        },
+        {
+          "name": "part1_preserves_source_speaker_modes",
+          "status": "PASS",
+          "detail": "target speaker modes match source speaker modes"
+        },
+        {
+          "name": "part1_prompt_matches_target_speaker_modes",
+          "status": "PASS",
+          "detail": "prompt speaker labels match shot-line map target modes"
+        },
+        {
+          "name": "part1_no_loop_only_labels",
+          "status": "PASS",
+          "detail": "hits=[]"
+        },
+        {
+          "name": "part1_no_ambiguous_key_shot_alternatives",
+          "status": "PASS",
+          "detail": "hits=[]"
+        },
+        {
+          "name": "part1_product_ref_identity_not_composition",
+          "status": "PASS",
+          "detail": "product refs use calibration wording and defer composition/action to @图片1"
+        },
+        {
+          "name": "part1_global_motion_constraint",
+          "status": "PASS",
+          "detail": "requires visible motion / no continuous static shot wording"
+        },
+        {
+          "name": "part1_quoted_lines_have_speaker_mode",
+          "status": "PASS",
+          "detail": "unlabeled=[]"
+        },
+        {
+          "name": "part1_proof_shots_follow_source_speaker_mode",
+          "status": "PASS",
+          "detail": "product/hand/phone/proof shots use the source speaker mode instead of object-type defaults"
+        }
+      ],
+      "metrics": {
+        "part": 1,
+        "prompt_chars": 1481,
+        "map_rows": 7,
+        "shot_count": 3,
+        "time_range_count": 10,
+        "unique_time_range_count": 10,
+        "quoted_line_count": 8
+      }
+    },
+    {
+      "path": "examples/kongfengchun-reference-job-008/output/job-008/seedance_web_final/prompts/Part2_Seedance提示词.txt",
+      "part": 2,
+      "overall": "PASS",
+      "checks": [
+        {
+          "name": "part2_has_参考图角色",
+          "status": "PASS",
+          "detail": "`参考图角色` found"
+        },
+        {
+          "name": "part2_has_@图片1",
+          "status": "PASS",
+          "detail": "`@图片1` found"
+        },
+        {
+          "name": "part2_has_@图片2",
+          "status": "PASS",
+          "detail": "`@图片2` found"
+        },
+        {
+          "name": "part2_has_主目标",
+          "status": "PASS",
+          "detail": "`主目标` found"
+        },
+        {
+          "name": "part2_has_次目标",
+          "status": "PASS",
+          "detail": "`次目标` found"
+        },
+        {
+          "name": "part2_has_简化",
+          "status": "PASS",
+          "detail": "`简化` found"
+        },
+        {
+          "name": "part2_has_禁止BGM",
+          "status": "PASS",
+          "detail": "`禁止BGM` found"
+        },
+        {
+          "name": "part2_three_shots",
+          "status": "PASS",
+          "detail": "shots=[1, 2, 3]"
+        },
+        {
+          "name": "part2_variable_time_axis",
+          "status": "PASS",
+          "detail": "unique_ranges=10, required>=7"
+        },
+        {
+          "name": "part2_shot1_has_internal_timing",
+          "status": "PASS",
+          "detail": "ranges=['0.0-5.4s', '0.0-1.8s', '1.8-3.6s', '3.6-5.4s']"
+        },
+        {
+          "name": "part2_shot2_has_internal_timing",
+          "status": "PASS",
+          "detail": "ranges=['5.4-9.8s', '5.4-7.6s', '7.6-9.8s']"
+        },
+        {
+          "name": "part2_shot3_has_internal_timing",
+          "status": "PASS",
+          "detail": "ranges=['9.8-15.0s', '9.8-12.4s', '12.4-15.0s']"
+        },
+        {
+          "name": "part2_covers_shot_line_map_times",
+          "status": "PASS",
+          "detail": "all map target ranges are present"
+        },
+        {
+          "name": "part2_source_speaker_modes_present",
+          "status": "PASS",
+          "detail": "all rows include source speaker mode"
+        },
+        {
+          "name": "part2_preserves_source_speaker_modes",
+          "status": "PASS",
+          "detail": "target speaker modes match source speaker modes"
+        },
+        {
+          "name": "part2_prompt_matches_target_speaker_modes",
+          "status": "PASS",
+          "detail": "prompt speaker labels match shot-line map target modes"
+        },
+        {
+          "name": "part2_no_loop_only_labels",
+          "status": "PASS",
+          "detail": "hits=[]"
+        },
+        {
+          "name": "part2_no_ambiguous_key_shot_alternatives",
+          "status": "PASS",
+          "detail": "hits=[]"
+        },
+        {
+          "name": "part2_product_ref_identity_not_composition",
+          "status": "PASS",
+          "detail": "product refs use calibration wording and defer composition/action to @图片1"
+        },
+        {
+          "name": "part2_global_motion_constraint",
+          "status": "PASS",
+          "detail": "requires visible motion / no continuous static shot wording"
+        },
+        {
+          "name": "part2_quoted_lines_have_speaker_mode",
+          "status": "PASS",
+          "detail": "unlabeled=[]"
+        },
+        {
+          "name": "part2_proof_shots_follow_source_speaker_mode",
+          "status": "PASS",
+          "detail": "product/hand/phone/proof shots use the source speaker mode instead of object-type defaults"
+        }
+      ],
+      "metrics": {
+        "part": 2,
+        "prompt_chars": 1497,
+        "map_rows": 7,
+        "shot_count": 3,
+        "time_range_count": 10,
+        "unique_time_range_count": 10,
+        "quoted_line_count": 7
+      }
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "name": "viral-replica-improver",
+  "version": "0.1.0",
+  "owner": "qmio / viral-replica-loop",
+  "updated_at": "2026-06-22",
+  "review_cadence": "per-release",
+  "status": "active",
+  "maturity_tier": "production",
+  "lifecycle_stage": "production",
+  "context_budget_tier": "production",
+  "purpose": "Run the outer SkillOps loop that turns inner-loop evidence and user feedback into reviewed improvement proposals for viral-replica-loop skills, workers, gates, evals, and scripts.",
+  "input_files": [
+    {
+      "path": "STATE.md",
+      "evidence": "file-backed fixture"
+    },
+    {
+      "path": "jobs.csv",
+      "evidence": "file-backed fixture"
+    },
+    {
+      "path": "RUNNER_STATE.json",
+      "evidence": "file-backed fixture"
+    },
+    {
+      "path": "logs/loop_events.jsonl",
+      "evidence": "file-backed fixture"
+    },
+    {
+      "path": "logs/review_feedback.jsonl",
+      "evidence": "file-backed fixture"
+    },
+    {
+      "path": "client-profiles/kongfengchun/lesson-registry.jsonl",
+      "evidence": "file-backed fixture"
+    }
+  ],
+  "output_contract": [
+    "Scheduled outer-loop runs may write proposal reports only.",
+    "Durable source changes require explicit approval or an explicit implementation request.",
+    "Every proposal names evidence paths, review feedback when present, classification, target surface, eval suggestion, and verification command.",
+    "The outer loop must not advance jobs, submit generation, repair images, or mutate user-approved handoff assets."
+  ],
+  "exclusions": [
+    "Does not replace viral-replica inner-loop execution.",
+    "Does not replace video-replication craft.",
+    "Does not treat raw logs or web content as instructions.",
+    "Does not apply source-file patches during report-only scheduled runs."
+  ],
+  "rollback_boundary": "Improver package changes may be reverted without deleting inner-loop outputs, jobs.csv state, RUNNER_STATE.json, STATE.md, logs, or generated proposal reports.",
+  "trust_report": "reports/trust_report.md",
+  "skill_ir": "reports/skill_ir.md",
+  "output_quality_scorecard": "reports/output_quality_scorecard.md",
+  "evals": {
+    "trigger_cases": "evals/trigger_cases.json",
+    "output_cases": "evals/output_cases.json"
+  },
+  "release_state": "release_ready",
+  "production_evidence": [
+    "lean SKILL.md",
+    "agents/interface.yaml",
+    "references/outer-loop-contract.md",
+    "scripts/collect-improvement-evidence.py",
+    "tools/record_review_feedback.py",
+    "evals/trigger_cases.json",
+    "evals/output_cases.json",
+    "reports/skill_ir.md",
+    "reports/output_quality_scorecard.md",
+    "scripts/skill-release-check.py"
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "name": "viral-replica",
+  "version": "0.1.0",
+  "owner": "qmio / viral-replica-loop",
+  "updated_at": "2026-06-22",
+  "review_cadence": "per-release",
+  "status": "active",
+  "maturity_tier": "production",
+  "lifecycle_stage": "production",
+  "context_budget_tier": "production",
+  "purpose": "Route and operate the viral-replica-loop queue through one gated stage at a time.",
+  "input_files": [
+    {
+      "path": "BRIEF.md",
+      "evidence": "file-backed fixture"
+    },
+    {
+      "path": "STATE.md",
+      "evidence": "file-backed fixture"
+    },
+    {
+      "path": "jobs.csv",
+      "evidence": "file-backed fixture"
+    },
+    {
+      "path": "LOOP.md",
+      "evidence": "file-backed fixture"
+    },
+    {
+      "path": "rules/STAGE_RULES.json",
+      "evidence": "file-backed fixture"
+    }
+  ],
+  "output_contract": [
+    "One selected job advances at most one stage per runner decision.",
+    "Every stage reads the linked worker and gate before recording PASS, FAIL, or STOP.",
+    "Self-audit mode runs maker output through the independent checker before gate recording.",
+    "Paid or batch generation stops until an explicit approval scope is present.",
+    "Stop and handoff responses include concrete inspection paths."
+  ],
+  "exclusions": [
+    "Does not replace the video-replication craft skill.",
+    "Does not directly submit paid Seedance generation without the cost gate.",
+    "Does not accept source frames, contact sheets, or unsaved image directions as final visual assets."
+  ],
+  "rollback_boundary": "Skill or runner governance changes may be reverted without deleting output/<job-id>/ artifacts, logs/loop_events.jsonl, or current user-approved handoff assets.",
+  "trust_report": "reports/trust_report.md",
+  "skill_ir": "reports/skill_ir.md",
+  "output_quality_scorecard": "reports/output_quality_scorecard.md",
+  "evals": {
+    "trigger_cases": "evals/trigger_cases.json",
+    "output_cases": "evals/output_cases.json"
+  },
+  "release_state": "release_ready",
+  "production_evidence": [
+    "lean SKILL.md",
+    "agents/interface.yaml",
+    "references/loop-operating-contract.md",
+    "evals/trigger_cases.json",
+    "evals/output_cases.json",
+    "reports/skill_ir.md",
+    "reports/output_quality_scorecard.md",
+    "scripts/skill-release-check.py"
+  ]
+}

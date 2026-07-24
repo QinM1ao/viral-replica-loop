@@ -1,0 +1,52 @@
+{
+  "id": "toner",
+  "scope": "category",
+  "usage_action": "pour or dispense watery toner into the palm and pat or press it onto the face",
+  "required_ref_roles": [
+    "source_storyboard",
+    "product_front",
+    "identity_ref"
+  ],
+  "optional_ref_roles": [
+    "product_open_or_cap"
+  ],
+  "reference_order_prefix": [
+    "source_storyboard",
+    "product_front",
+    "identity_ref"
+  ],
+  "checks": {
+    "requires_afterwash_ref": false,
+    "requires_mud_checks": false,
+    "requires_skincare_progression": false,
+    "requires_finger_jar_application": false
+  },
+  "prompt_required_groups": [
+    {
+      "name": "toner_application",
+      "patterns": [
+        "轻拍",
+        "拍",
+        "倒",
+        "掌心",
+        "\\bpat\\b",
+        "\\bpalm\\b",
+        "\\btoner\\b"
+      ]
+    }
+  ],
+  "tool_risk_translation_groups": [
+    {
+      "name": "toner_application",
+      "patterns": [
+        "轻拍",
+        "拍",
+        "倒",
+        "掌心",
+        "\\bpat\\b",
+        "\\bpalm\\b",
+        "\\btoner\\b"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "skill": "viral-replica-improver",
+  "purpose": "Route-confusion fixture for the outer SkillOps loop.",
+  "cases": [
+    {
+      "id": "improver-positive-daily-review",
+      "kind": "positive",
+      "prompt": "每天读 viral-replica-loop 的运行记录和用户反馈，生成让 skill 越用越顺的改进提案。",
+      "expected_skill": "viral-replica-improver",
+      "near_neighbor": "viral-replica",
+      "why": "The request is about learning from runs, not advancing jobs."
+    },
+    {
+      "id": "improver-positive-qc-miss",
+      "kind": "positive",
+      "prompt": "这次 checker 漏掉了 Part1/Part2 衣服不连续，帮我把这个失败沉淀成 eval 或 gate 改进。",
+      "expected_skill": "viral-replica-improver",
+      "near_neighbor": "video-replication",
+      "why": "The user wants to convert a failure into durable loop improvement."
+    },
+    {
+      "id": "improver-positive-proposal",
+      "kind": "positive",
+      "prompt": "根据最近 STATE.md 和 logs/loop_events.jsonl，给我一份 SkillOps improvement proposal，先不要改代码。",
+      "expected_skill": "viral-replica-improver",
+      "near_neighbor": "viral-replica",
+      "why": "Proposal-only outer loop work is owned by the improver."
+    },
+    {
+      "id": "improver-near-inner-loop",
+      "kind": "near_neighbor",
+      "prompt": "继续 job-003，只推进一个阶段，跑完 worker 和 gate 后停。",
+      "expected_skill": "viral-replica",
+      "should_not_route": "viral-replica-improver",
+      "why": "Advancing jobs belongs to the inner loop adapter."
+    },
+    {
+      "id": "improver-near-craft",
+      "kind": "near_neighbor",
+      "prompt": "帮我修 Part2 的泥膜颜色和 Seedance 提示词，让画面更像源视频。",
+      "expected_skill": "video-replication",
+      "should_not_route": "viral-replica-improver",
+      "why": "Video craft and prompt repair are not outer-loop evidence review."
+    },
+    {
+      "id": "improver-negative-general-summary",
+      "kind": "negative",
+      "prompt": "总结一下今天我们聊了什么，不要检查项目文件。",
+      "expected_skill": "none",
+      "should_not_route": "viral-replica-improver",
+      "why": "General conversation summary is not SkillOps improvement."
+    }
+  ]
+}

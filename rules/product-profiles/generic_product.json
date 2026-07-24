@@ -1,0 +1,70 @@
+{
+  "id": "generic_product",
+  "scope": "generic",
+  "usage_action": "replace source action with the current product's real usage action",
+  "required_ref_roles": [
+    "source_storyboard",
+    "product_front",
+    "identity_ref"
+  ],
+  "optional_ref_roles": [],
+  "reference_order_prefix": [
+    "source_storyboard",
+    "product_front",
+    "identity_ref"
+  ],
+  "required_review_flags": [
+    "layout_matches_source",
+    "source_aspect_preserved",
+    "source_scene_preserved",
+    "no_identity_reference_background",
+    "no_product_reference_background",
+    "same_identity_as_reference",
+    "primary_identity_consistent",
+    "primary_identity_only_on_target_role",
+    "secondary_characters_keep_source_role_gender",
+    "no_source_host_identity",
+    "target_product_packaging",
+    "target_product_label",
+    "no_old_product",
+    "no_subtitles_or_text"
+  ],
+  "source_storyboard_controls": [
+    "layout",
+    "shot_order",
+    "framing",
+    "action_rhythm",
+    "scene_family",
+    "shot_labels"
+  ],
+  "source_storyboard_must_not_control": [
+    "old_product",
+    "old_tool",
+    "old_host_identity",
+    "old_mud_color",
+    "subtitles"
+  ],
+  "checks": {
+    "requires_product_consistency": true,
+    "requires_afterwash_ref": false,
+    "requires_mud_checks": false,
+    "requires_skincare_progression": false,
+    "requires_finger_jar_application": false
+  },
+  "label_review_policy": {
+    "storyboard_microtext_exact_required": false,
+    "small_or_distant_product_text": "visual_match_only",
+    "microtext_only_mismatch_outcome": "VISUAL_WARNING",
+    "hero_closeup_major_label_required": true
+  },
+  "character_policy": {
+    "primary_identity_scope": "approved identity applies only to the source-defined product host or protagonist role",
+    "secondary_character_rule": "preserve each secondary character's story role and gender; replace or de-identify them as generic context identities, and never turn them into the primary approved identity"
+  },
+  "prompt_required_groups": [
+    {
+      "name": "target_product",
+      "patterns": []
+    }
+  ]
+}

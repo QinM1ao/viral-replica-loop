@@ -1,0 +1,18 @@
+interface:
+  display_name: "Viral Replica"
+  short_description: "Production loop adapter for one-stage-at-a-time viral video replication queues."
+  default_prompt: "Use $viral-replica to run or audit the viral-replica-loop queue through its worker, gate, checker, state, and approval boundaries."
+  primary_outputs:
+    - "next runner decision"
+    - "stage artifact"
+    - "checker review"
+    - "gate result"
+    - "inspection paths"
+  exclusions:
+    - "one-shot video craft without loop state"
+    - "paid Seedance submission without explicit approval"
+    - "final upload packaging from failed or deprecated assets"
+  preserves:
+    - "workers/*.md"
+    - "gates/*.md"
+    - "$video-replication craft"

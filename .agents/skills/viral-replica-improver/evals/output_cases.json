@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "skill": "viral-replica-improver",
+  "execution_kind": "file-backed fixture",
+  "cases": [
+    {
+      "id": "improver-output-proposal-shape",
+      "task": "Generate an outer-loop improvement proposal from loop evidence.",
+      "input_files": [
+        "STATE.md",
+        "jobs.csv",
+        "logs/loop_events.jsonl",
+        "client-profiles/kongfengchun/lesson-registry.jsonl"
+      ],
+      "baseline_failures": [
+        "May give vague advice without evidence paths.",
+        "May jump directly to source edits without an approval boundary."
+      ],
+      "with_skill_assertions": [
+        "Proposal includes observed signals, evidence paths, classification, recommended action, target surface, eval suggestion, verification command, and approval boundary.",
+        "Proposal-only runs do not write source patches."
+      ],
+      "evidence_status": "file-backed fixture"
+    },
+    {
+      "id": "improver-output-inner-loop-separation",
+      "task": "Handle a request to keep improving the loop after a failed job run.",
+      "input_files": [
+        ".agents/skills/viral-replica-improver/SKILL.md",
+        ".agents/skills/viral-replica/SKILL.md"
+      ],
+      "baseline_failures": [
+        "May rerun a job or repair images while trying to improve the skill.",
+        "May mutate jobs.csv or output handoff assets."
+      ],
+      "with_skill_assertions": [
+        "The improver does not advance jobs, submit generation, repair images, or mutate handoff assets.",
+        "The improver delegates runtime execution back to viral-replica."
+      ],
+      "evidence_status": "file-backed fixture"
+    },
+    {
+      "id": "improver-output-eval-growth",
+      "task": "Convert a repeated failure into a durable improvement.",
+      "input_files": [
+        ".agents/skills/viral-replica-improver/references/outer-loop-contract.md",
+        ".agents/skills/viral-replica/evals/output_cases.json"
+      ],
+      "baseline_failures": [
+        "May add prose only, leaving the failure without regression coverage.",
+        "May patch the broadest skill file instead of the smallest durable surface."
+      ],
+      "with_skill_assertions": [
+        "The proposal names whether the change belongs in report, eval, reference, worker, gate, script, or no action.",
+        "Recurring failures include a suggested eval case."
+      ],
+      "evidence_status": "file-backed fixture"
+    },
+    {
+      "id": "improver-output-review-feedback-ledger",
+      "task": "Use human review feedback to improve future inner-loop context.",
+      "input_files": [
+        "logs/review_feedback.jsonl",
+        "tools/record_review_feedback.py",
+        ".agents/skills/viral-replica-improver/references/outer-loop-contract.md"
+      ],
+      "baseline_failures": [
+        "May treat every user edit as an immediate rule change.",
+        "May ignore accepted visual warnings or manual validations because they are not hard failures."
+      ],
+      "with_skill_assertions": [
+        "The proposal includes a Review Feedback section when ledger entries exist.",
+        "The improver distinguishes missing context, eval gaps, gate gaps, and human judgment before recommending a durable surface.",
+        "Review feedback entries do not automatically apply source patches."
+      ],
+      "evidence_status": "file-backed fixture"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "id": "kongfengchun_clean_mud_mask",
+  "scope": "sku",
+  "usage_action": "show the Kongfengchun cleansing mud mask jar, open milky-white thick paste, finger pickup, and fingertip face application",
+  "checks": {
+    "requires_afterwash_ref": false,
+    "requires_mud_checks": true,
+    "requires_skincare_progression": true,
+    "requires_finger_jar_application": true
+  },
+  "prompt_required_groups": [
+    {
+      "name": "target_product",
+      "patterns": [
+        "孔凤春",
+        "清洁泥膜",
+        "泥膜",
+        "Kongfengchun",
+        "clay mask"
+      ]
+    }
+  ]
+}

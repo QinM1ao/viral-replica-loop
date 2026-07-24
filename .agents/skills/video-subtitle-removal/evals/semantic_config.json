@@ -1,0 +1,117 @@
+{
+  "optimizer_hints": {
+    "capability": "Remove subtitles from video",
+    "inputs": [
+      "generated video",
+      "viral-replica-loop final video",
+      "final MP4",
+      "burned-in captions",
+      "subtitle track"
+    ],
+    "trigger_actions": [
+      "remove subtitles",
+      "erase baked-in captions",
+      "drop a subtitle track",
+      "去掉视频字幕",
+      "擦除硬字幕"
+    ],
+    "exclusions": [
+      "ASR",
+      "subtitle creation",
+      "OCR",
+      "watermark removal",
+      "general video editing"
+    ]
+  },
+  "fallback_positive_concepts": [
+    "subtitle_removal"
+  ],
+  "positive_concepts": {
+    "subtitle_removal": {
+      "weight": 0.6,
+      "phrases": [
+        "remove subtitles",
+        "remove the subtitles",
+        "remove captions",
+        "remove the baked-in captions",
+        "erase captions",
+        "erase baked-in captions",
+        "subtitle removal",
+        "去掉字幕",
+        "中文字幕去掉",
+        "去掉视频字幕",
+        "擦掉字幕",
+        "擦干净",
+        "擦除硬字幕",
+        "自动清理",
+        "按工作流自动清理",
+        "处理干净"
+      ]
+    },
+    "separate_track": {
+      "weight": 0.2,
+      "phrases": [
+        "separate subtitle track",
+        "drop a subtitle track",
+        "remux",
+        "可切换字幕轨",
+        "独立字幕轨"
+      ]
+    },
+    "pixel_repair": {
+      "weight": 0.2,
+      "phrases": [
+        "baked-in captions",
+        "baked into video pixels",
+        "burned-in captions",
+        "hard subtitles",
+        "烧在画面",
+        "硬字幕",
+        "人物和产品不要糊",
+        "check for flicker"
+      ]
+    }
+  },
+  "negative_concepts": {
+    "subtitle_creation": {
+      "weight": 0.8,
+      "exclusive": true,
+      "phrases": [
+        "add subtitles",
+        "subtitle addition",
+        "加字幕",
+        "转成中文字幕",
+        "asr"
+      ]
+    },
+    "text_extraction": {
+      "weight": 0.8,
+      "exclusive": true,
+      "phrases": [
+        "extract subtitles",
+        "ocr",
+        "识别并导出",
+        "识别它写了什么"
+      ]
+    },
+    "watermark_removal": {
+      "weight": 0.8,
+      "exclusive": true,
+      "phrases": [
+        "watermark removal",
+        "remove watermark",
+        "水印去掉",
+        "角标水印"
+      ]
+    },
+    "general_editing": {
+      "weight": 0.7,
+      "exclusive": true,
+      "phrases": [
+        "general editing",
+        "重新剪一条视频",
+        "裁掉视频底部"
+      ]
+    }
+  }
+}

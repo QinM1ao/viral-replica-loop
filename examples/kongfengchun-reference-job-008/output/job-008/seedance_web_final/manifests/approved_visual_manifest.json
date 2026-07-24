@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "job_id": "job-008",
+  "stage": "image_batch_qc",
+  "product_group_id": "kongfengchun_clean_mud_mask",
+  "product_group_manifest": "output/shared/kongfengchun/products/kongfengchun_clean_mud_mask/manifest.json",
+  "identity_group_id": "kongfengchun_male_content4",
+  "identity_group_manifest": "output/shared/kongfengchun/identities/kongfengchun_male_content4/manifest.json",
+  "reusable_refs": {
+    "product_front": "output/shared/kongfengchun/products/kongfengchun_clean_mud_mask/product_front_tight.png",
+    "product_open": "output/shared/kongfengchun/products/kongfengchun_clean_mud_mask/product_open_white_mud_tight.png",
+    "identity_ref": "output/shared/kongfengchun/identities/kongfengchun_male_content4/identity_ref.png",
+    "afterwash_face": "output/shared/kongfengchun/identities/kongfengchun_male_content4/afterwash_face_closeup.png"
+  },
+  "part_storyboards": {
+    "part1": {
+      "path": "output/job-008/final-images/part1_seedance_ref.png",
+      "asset_type": "AI改好分镜图",
+      "image_route": "matpool_gpt_image_2_edit",
+      "contains_source_video_pixels": false,
+      "source_reference": "output/job-008/storyboard_source_refs/source_storyboard_part1.jpg",
+      "prompt": "output/job-008/image-batch/prompts/part1_rolemap_prompt_v3_product_mud_hardgate.md",
+      "candidate_sha256": "e76c63fdd0747681fec0da965a392983e8f9933ac4061151f902050df2bb3fb1",
+      "synced_from_candidate": "output/job-008/image-batch/candidates/part1_matpool_v3.png",
+      "hard_gate": "output/job-008/checks/part1_image_hard_gate_qc.json"
+    },
+    "part2": {
+      "path": "output/job-008/final-images/part2_seedance_ref.png",
+      "asset_type": "AI改好分镜图",
+      "image_route": "matpool_gpt_image_2_edit",
+      "contains_source_video_pixels": false,
+      "source_reference": "output/job-008/storyboard_source_refs/source_storyboard_part2.jpg",
+      "prompt": "output/job-008/image-batch/prompts/part2_rolemap_prompt_v2_source_scene_strict.md",
+      "candidate_sha256": "a35ddd3c408db07bdf43ad3cfdd5bff4de3911fb9c2aab76ba23ca8bb70ba7e7",
+      "synced_from_candidate": "output/job-008/image-batch/candidates/part2_matpool_v2.png",
+      "hard_gate": "output/job-008/checks/part2_image_hard_gate_qc.json"
+    }
+  },
+  "promotion_note": "Promoted Part1 V3 plus Part2 V2 after manual visual inspection: source room cues retained, same male identity, readable KOPHENIX/Kongfengchun jar, thick milky-white mud, no source subtitles."
+}

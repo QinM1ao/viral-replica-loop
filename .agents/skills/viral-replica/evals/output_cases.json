@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "skill": "viral-replica",
+  "execution_kind": "recorded_fixture",
+  "cases": [
+    {
+      "id": "vr-output-pre-seedance-stop",
+      "task": "Run a self-audit loop request until the web-side Seedance handoff boundary.",
+      "input_files": [
+        "BRIEF.md",
+        "STATE.md",
+        "jobs.csv",
+        "rules/STAGE_RULES.json"
+      ],
+      "baseline_failures": [
+        "May continue into generation without explicit paid-generation approval.",
+        "May omit concrete inspection paths in the final response."
+      ],
+      "with_skill_assertions": [
+        "Final state stops at seedance_inputs_prepared or explicit generation approval boundary.",
+        "Response lists the handoff directory and key prompt, audio, image, manifest, and QC paths.",
+        "No paid/API Seedance submission is implied without approval."
+      ],
+      "evidence_status": "file-backed fixture"
+    },
+    {
+      "id": "vr-output-image-gate-pass",
+      "task": "Record PASS for image batch or request QC.",
+      "input_files": [
+        "tools/run_next_loop_round.py",
+        "workers/checker_worker.md",
+        "LOOP.md"
+      ],
+      "baseline_failures": [
+        "May trust maker summary without checker evidence.",
+        "May promote visual assets without manifest, contract, geometry, continuity, or skincare QC."
+      ],
+      "with_skill_assertions": [
+        "PASS is refused when checker review QC is missing or failing.",
+        "Visual manifest QC is required for image/prompt/request stages.",
+        "Codex ImageGen, storyboard geometry, cross-Part, skincare, and audio duration checks are enforced where applicable."
+      ],
+      "evidence_status": "file-backed fixture"
+    },
+    {
+      "id": "vr-output-loop-scope",
+      "task": "Handle a craft-only request while inside the loop repository.",
+      "input_files": [
+        ".agents/skills/viral-replica/SKILL.md",
+        ".agents/skills/video-replication/SKILL.md"
+      ],
+      "baseline_failures": [
+        "May mutate jobs.csv or STATE.md during a craft-only prompt request."
+      ],
+      "with_skill_assertions": [
+        "Craft-only requests are routed to video-replication or a Seedance prompt skill.",
+        "viral-replica is used only when queue, gate, state, approval, or handoff packaging is in scope."
+      ],
+      "evidence_status": "file-backed fixture"
+    }
+  ]
+}

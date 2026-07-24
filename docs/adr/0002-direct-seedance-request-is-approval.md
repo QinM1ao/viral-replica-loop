@@ -1,0 +1,3 @@
+# Direct Seedance Request Is Approval
+
+When the user asks the loop to run Seedance, generate the final video, or directly produce the video, that message is the generation approval for the current explicit job/generation round by default, covering every required Part for that job once. The cost gate still verifies request QC, task count, `--allow-paid`, approval recording, and approval scope, but it must not ask for a second confirmation or a separate Part2 confirmation. This trades a little less ceremony for a much faster loop, while keeping accidental paid generation blocked when the user only says ambiguous free-work phrases like "继续", "下一步", or "试试"; batch generation and failed-Part retries each require explicit scope-specific approval.

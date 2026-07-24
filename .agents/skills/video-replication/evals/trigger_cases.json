@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "skill": "video-replication",
+  "purpose": "Route-confusion fixture for video craft versus loop operation.",
+  "cases": [
+    {
+      "id": "vrep-trigger-source-replication",
+      "kind": "positive",
+      "prompt": "像这个视频一样做一个，换成我的产品和模特，保留镜头节奏。",
+      "expected_skill": "video-replication",
+      "near_neighbor": "viral-replica",
+      "why": "The user asks for the replication craft, not queue operation."
+    },
+    {
+      "id": "vrep-trigger-skincare-craft",
+      "kind": "positive",
+      "prompt": "这个泥膜视频要重做，帮我拆剧情、分镜、改图规则和 Seedance 提示词。",
+      "expected_skill": "video-replication",
+      "near_neighbor": "viral-replica",
+      "why": "The work is skincare video replication craft."
+    },
+    {
+      "id": "vrep-trigger-image-repair",
+      "kind": "positive",
+      "prompt": "Part2 的泥膜偏黄，只快修这张图，保持源分镜构图不变。",
+      "expected_skill": "video-replication",
+      "near_neighbor": "viral-replica",
+      "why": "Localized visual repair uses craft rules; the loop wrapper may record gates if invoked inside the kit."
+    },
+    {
+      "id": "vrep-near-neighbor-loop-batch",
+      "kind": "near_neighbor",
+      "prompt": "把 jobs.csv 里所有任务自检跑到 seedance_inputs_prepared。",
+      "expected_skill": "viral-replica",
+      "should_not_route": "video-replication",
+      "why": "Batch queue control belongs to viral-replica."
+    },
+    {
+      "id": "vrep-negative-final-upload-audit",
+      "kind": "negative",
+      "prompt": "检查 seedance_web_final 目录有没有混入废稿或旧音频。",
+      "expected_skill": "viral-replica",
+      "should_not_route": "video-replication",
+      "why": "Final handoff packaging audit is a loop artifact boundary."
+    },
+    {
+      "id": "vrep-negative-provider-docs",
+      "kind": "negative",
+      "prompt": "查一下今天 Seedance API 的最新 taskCode 文档。",
+      "expected_skill": "seedance-pipeline",
+      "should_not_route": "video-replication",
+      "why": "Live provider documentation lookup is not video craft."
+    }
+  ]
+}

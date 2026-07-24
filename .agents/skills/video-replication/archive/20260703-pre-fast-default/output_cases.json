@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "skill": "video-replication",
+  "execution_kind": "recorded_fixture",
+  "cases": [
+    {
+      "id": "vrep-output-story-before-prompt",
+      "task": "Create voiceover and Seedance prompts from a reference video.",
+      "input_files": [
+        ".agents/skills/video-replication/SKILL.md",
+        ".agents/skills/video-replication/references/seedance-20-prompt-standard.md"
+      ],
+      "baseline_failures": [
+        "May write generic sales copy from storyboard images only.",
+        "May omit source ASR, subtitles, and story rhythm."
+      ],
+      "with_skill_assertions": [
+        "Story analysis precedes voiceover and Seedance prompt writing.",
+        "Prompts preserve source beats while replacing product and identity.",
+        "Final prompt text avoids loop-only labels."
+      ],
+      "evidence_status": "file-backed fixture",
+      "missing_evidence": [
+        "model-executed baseline output",
+        "model-executed with-skill output",
+        "blind reviewer decision"
+      ]
+    },
+    {
+      "id": "vrep-output-story-to-seedance-final-standard",
+      "task": "Create final Seedance 2.0 prompts for a 30s product-replacement replica with real product refs, identity refs, and reference audio.",
+      "input_files": [
+        ".agents/skills/video-replication/SKILL.md",
+        ".agents/skills/video-replication/references/seedance-20-prompt-standard.md",
+        "output/job-001/剧情分析/剧情分析.md",
+        "output/job-001/seedance_v3_1_ordinary_2_0_20260703/prompts/part1_seedance_prompt_v3_1_ordinary_2_0_tiny_ref_fix.txt"
+      ],
+      "baseline_failures": [
+        "May write a generic product ad from storyboard images without preserving source hook, proof beats, or offer timing.",
+        "May fail to distinguish narration from in-frame synchronous speech.",
+        "May let a product white-background reference become a static packshot scene.",
+        "May use ambiguous visual alternatives such as handheld-or-tabletop and palm-or-handback."
+      ],
+      "with_skill_assertions": [
+        "A shot-line map is derived from story analysis, ASR/subtitles, visual timeline, product profile, voiceover, seam notes, and approved references before final prompt writing.",
+        "Every conversion-critical source beat is represented inside a Shot group: hook, scene transition, first-person operation, product reveal, use proof, label proof, result proof, phone/social proof, and offer close when present.",
+        "Every spoken line is assigned a speaker mode: narration, in-frame sync, supporting role sync, or group reaction.",
+        "Product references calibrate packaging identity, label text, bottle proportion, or material only; storyboard reference controls composition, hand action, and product appearance rhythm.",
+        "Key product-action and proof beats avoid ambiguous alternatives and use positive visible motion."
+      ],
+      "actual_validation_report": ".agents/skills/video-replication/reports/actual_validation_20260703/story_to_prompt_validation.md",
+      "evidence_status": "file-backed fixture",
+      "missing_evidence": [
+        "model-executed baseline output",
+        "model-executed with-skill output",
+        "blind reviewer decision"
+      ]
+    },
+    {
+      "id": "vrep-output-source-storyboard-edit",
+      "task": "Generate or repair image-stage storyboard assets.",
+      "input_files": [
+        ".agents/skills/video-replication/SKILL.md",
+        ".agents/skills/video-replication/references/codex-imagegen-direct.md"
+      ],
+      "baseline_failures": [
+        "May generate a new collage instead of editing the source storyboard.",
+        "May keep old product, old tool, old wardrobe, subtitles, or wrong mud color."
+      ],
+      "with_skill_assertions": [
+        "The source storyboard controls layout, shot order, framing, and action rhythm only.",
+        "The approved identity and product references replace old person, product, tool, mud, and text.",
+        "Failed recomposed or squeezed candidates are discarded instead of repaired forward."
+      ],
+      "evidence_status": "file-backed fixture",
+      "missing_evidence": [
+        "blind reviewer decision"
+      ]
+    },
+    {
+      "id": "vrep-output-skincare-progression",
+      "task": "Replicate a skincare or cleansing mud-mask video.",
+      "input_files": [
+        ".agents/skills/video-replication/references/skincare-beauty-replication.md",
+        "tools/skincare_progression_qc.py"
+      ],
+      "baseline_failures": [
+        "May make pre-wash skin already too clean or bright.",
+        "May fail to show improvement after wash or wipe proof."
+      ],
+      "with_skill_assertions": [
+        "Pre-wash state remains visibly pre-use or problem-bearing.",
+        "After-wash improvement appears only after cleaning evidence.",
+        "White thick mud rules are preserved for mud-mask jobs."
+      ],
+      "evidence_status": "file-backed fixture",
+      "missing_evidence": [
+        "provider-backed output run",
+        "blind reviewer decision"
+      ]
+    },
+    {
+      "id": "vrep-output-visible-label-role-map",
+      "task": "Repair a GPT Image storyboard where product label text disappeared and a male supporting role was replaced by the female protagonist identity.",
+      "input_files": [
+        ".agents/skills/video-replication/SKILL.md",
+        ".agents/skills/video-replication/references/replication-lessons.md",
+        "output/job-001/checks/part1_label_rolemap_repair_contract_qc.json"
+      ],
+      "baseline_failures": [
+        "May accept a blank or pseudo-text product bottle because the prompt only says label clear.",
+        "May apply the approved protagonist identity to every person in a multi-person source storyboard.",
+        "May continue repairing from the failed blank-label candidate instead of restarting from the source storyboard."
+      ],
+      "with_skill_assertions": [
+        "Product profiles with visible_text_patterns require readable real product words in product-close panels.",
+        "The contract review includes product_visible_text=true and no_blank_label=true.",
+        "A source-story role map keeps the approved identity on the protagonist/product-host role only and preserves secondary role gender.",
+        "Candidates that changed label, role structure, scene, or geometry are discarded and rebuilt from the source Part storyboard."
+      ],
+      "evidence_status": "file-backed fixture",
+      "missing_evidence": [
+        "blind reviewer decision"
+      ]
+    }
+  ]
+}

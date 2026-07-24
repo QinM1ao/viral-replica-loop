@@ -1,0 +1,18 @@
+{
+  "overall": "PASS",
+  "limit_seconds": 15.0,
+  "files": [
+    {
+      "path": "output/job-008/seedance_web_final/Part1_上传素材/06_音频1_Part1原爆款声音参考.mp3",
+      "duration_seconds": 14.891973,
+      "status": "PASS",
+      "detail": "within strict upload limit"
+    },
+    {
+      "path": "output/job-008/seedance_web_final/Part2_上传素材/06_音频1_Part2原爆款声音参考.mp3",
+      "duration_seconds": 14.873719,
+      "status": "PASS",
+      "detail": "within strict upload limit"
+    }
+  ]
+}

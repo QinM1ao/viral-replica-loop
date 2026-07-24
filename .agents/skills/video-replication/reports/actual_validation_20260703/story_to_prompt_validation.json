@@ -1,0 +1,54 @@
+{
+  "overall": "PASS",
+  "execution_kind": "live_codex_same_case_regeneration",
+  "provider": "codex_app_current_thread",
+  "blind_holdout": false,
+  "validated_at": "2026-07-03",
+  "input_files": [
+    ".agents/skills/video-replication/SKILL.md",
+    ".agents/skills/video-replication/references/seedance-20-prompt-standard.md",
+    "output/job-001/剧情分析/剧情分析.md",
+    "output/job-001/分镜/分镜表与缝点审查.md",
+    "output/job-001/voiceover/voiceover.md",
+    "output/job-001/seam/seam_design.md",
+    "output/job-001/product_profile.json",
+    "output/job-001/visual-assets/approved_visual_manifest.json"
+  ],
+  "generated_outputs": [
+    ".agents/skills/video-replication/reports/actual_validation_20260703/regenerated_part1_prompt.txt",
+    ".agents/skills/video-replication/reports/actual_validation_20260703/regenerated_part2_prompt.txt"
+  ],
+  "golden_outputs": [
+    "output/job-001/seedance_v3_1_ordinary_2_0_20260703/prompts/part1_seedance_prompt_v3_1_ordinary_2_0_tiny_ref_fix.txt",
+    "output/job-001/seedance_v3_1_ordinary_2_0_20260703/prompts/part2_seedance_prompt_v3_1_ordinary_2_0.txt"
+  ],
+  "notes": [
+    "Same-case reproduction using the updated skill standard and job-001 artifacts.",
+    "This validates prompt-level reproducibility for the known case; it is not a provider-backed blind holdout.",
+    "The validation does not prove generalization to a new unseen video; a future holdout case is still required."
+  ],
+  "checks": [
+    {"name": "part1:has_reference_roles", "status": "PASS"},
+    {"name": "part1:has_core_shape", "status": "PASS"},
+    {"name": "part1:has_3_shots", "status": "PASS"},
+    {"name": "part1:speaker_layering", "status": "PASS"},
+    {"name": "part1:product_ref_binding", "status": "PASS"},
+    {"name": "part1:motion_constraint", "status": "PASS"},
+    {"name": "part1:no_bgm_no_text", "status": "PASS"},
+    {"name": "part1:no_banned_or_ambiguous_terms", "status": "PASS"},
+    {"name": "part1:golden_similarity_reference", "status": "PASS", "detail": "0.902"},
+    {"name": "part1:story_beats", "status": "PASS"},
+    {"name": "part1:product_shots_no_mouth", "status": "PASS"},
+    {"name": "part2:has_reference_roles", "status": "PASS"},
+    {"name": "part2:has_core_shape", "status": "PASS"},
+    {"name": "part2:has_3_shots", "status": "PASS"},
+    {"name": "part2:speaker_layering", "status": "PASS"},
+    {"name": "part2:product_ref_binding", "status": "PASS"},
+    {"name": "part2:motion_constraint", "status": "PASS"},
+    {"name": "part2:no_bgm_no_text", "status": "PASS"},
+    {"name": "part2:no_banned_or_ambiguous_terms", "status": "PASS"},
+    {"name": "part2:golden_similarity_reference", "status": "PASS", "detail": "0.923"},
+    {"name": "part2:story_beats", "status": "PASS"},
+    {"name": "part2:product_shots_no_mouth", "status": "PASS"}
+  ]
+}

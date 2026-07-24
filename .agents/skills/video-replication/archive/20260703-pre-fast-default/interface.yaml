@@ -1,0 +1,16 @@
+interface:
+  display_name: "Video Replication"
+  short_description: "Craft method for source-aligned viral video replication and Seedance-ready assets."
+  default_prompt: "Use $video-replication for source story analysis, storyboard, image replacement, voice, seam, Seedance prompt, generation, and final QC craft decisions."
+  primary_outputs:
+    - "story analysis"
+    - "storyboard and seam plan"
+    - "AI-edited storyboard images"
+    - "voiceover and audio-boundary notes"
+    - "story-to-prompt shot-line map"
+    - "Seedance production brief"
+  exclusions:
+    - "queue selection"
+    - "jobs.csv mutation"
+    - "cost approval ownership"
+    - "loop state writeback"

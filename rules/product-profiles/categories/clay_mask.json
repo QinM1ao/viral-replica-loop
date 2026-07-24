@@ -1,0 +1,78 @@
+{
+  "id": "clay_mask",
+  "scope": "category",
+  "usage_action": "pick up thick clay paste from the open jar and apply it to the face with fingertips",
+  "required_ref_roles": [
+    "source_storyboard",
+    "product_front",
+    "product_open_mud",
+    "identity_ref"
+  ],
+  "optional_ref_roles": [],
+  "reference_order_prefix": [
+    "source_storyboard",
+    "product_front",
+    "product_open_mud",
+    "identity_ref"
+  ],
+  "required_review_flags": [
+    "white_milky_thick_mud",
+    "finger_or_fingertip_application",
+    "no_tube_stick_brush_cotton_swatch",
+    "no_arm_swatch"
+  ],
+  "checks": {
+    "requires_afterwash_ref": false,
+    "requires_mud_checks": true,
+    "requires_skincare_progression": true,
+    "requires_finger_jar_application": true
+  },
+  "prompt_required_groups": [
+    {
+      "name": "finger_application",
+      "patterns": [
+        "手指",
+        "指腹",
+        "\\bfinger\\b",
+        "\\bfingertip\\b",
+        "\\bfingertips\\b"
+      ]
+    },
+    {
+      "name": "open_jar",
+      "patterns": [
+        "罐",
+        "\\bjar\\b"
+      ]
+    },
+    {
+      "name": "white_thick_mud",
+      "patterns": [
+        "乳白",
+        "奶白",
+        "白色厚泥",
+        "白泥",
+        "milky[- ]white",
+        "white thick"
+      ]
+    }
+  ],
+  "tool_risk_translation_groups": [
+    {
+      "name": "finger_application",
+      "patterns": [
+        "手指",
+        "指腹",
+        "\\bfinger\\b",
+        "\\bfingertip\\b"
+      ]
+    },
+    {
+      "name": "open_jar",
+      "patterns": [
+        "罐",
+        "\\bjar\\b"
+      ]
+    }
+  ]
+}

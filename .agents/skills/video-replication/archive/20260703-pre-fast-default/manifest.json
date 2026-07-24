@@ -1,0 +1,60 @@
+{
+  "name": "video-replication",
+  "version": "0.1.0",
+  "owner": "qmio / viral-replica-loop",
+  "updated_at": "2026-07-03",
+  "review_cadence": "per-release",
+  "status": "active",
+  "maturity_tier": "governed",
+  "lifecycle_stage": "governed",
+  "context_budget_tier": "governed",
+  "purpose": "Provide the craft method for source-story video replication, image replacement, voice, seam, Seedance prompt, generation, and final QC.",
+  "input_files": [
+    {
+      "path": ".agents/skills/video-replication/SKILL.md",
+      "evidence": "file-backed fixture"
+    },
+    {
+      "path": ".agents/skills/video-replication/references/skincare-beauty-replication.md",
+      "evidence": "file-backed fixture"
+    },
+    {
+      "path": ".agents/skills/video-replication/references/seedance-20-prompt-standard.md",
+      "evidence": "file-backed fixture"
+    },
+    {
+      "path": ".agents/skills/video-replication/references/codex-imagegen-direct.md",
+      "evidence": "file-backed fixture"
+    }
+  ],
+  "output_contract": [
+    "Story analysis comes before voiceover or Seedance prompts.",
+    "Image stages produce saved current-job AI-edited storyboard assets, not source frames or composites.",
+    "Matpool GPT-Image-2 work records edit/reference contract evidence when used.",
+    "Visible product text declared by product profiles remains readable in product close-ups.",
+    "Multi-person storyboards use a role map so the approved identity applies only to the protagonist/product-host role.",
+    "Final Seedance prompts are model-facing production briefs without loop-only labels.",
+    "Final Seedance prompts are derived from story analysis, ASR/subtitles, visual timeline, product profile, voiceover, seam notes, and approved references through a shot-line map.",
+    "Final Seedance prompts distinguish narration from in-frame synchronous speech and prevent product-reference packshot leakage by binding product refs to identity/material only.",
+    "Skincare and mud-mask work preserves source rhythm while enforcing before/after and white-mud rules."
+  ],
+  "exclusions": [
+    "Does not own jobs.csv selection, cost approval, or STATE.md writeback.",
+    "Does not bypass viral-replica loop gates when running inside viral-replica-loop.",
+    "Does not package deprecated or failed visual candidates as upload assets."
+  ],
+  "rollback_boundary": "Craft-rule changes may be reverted without modifying current queue state or deleting job artifacts; loop state rollback belongs to viral-replica.",
+  "trust_report": "reports/trust_report.md",
+  "output_quality_scorecard": "reports/output_quality_scorecard.md",
+  "evals": {
+    "trigger_cases": "evals/trigger_cases.json",
+    "output_cases": "evals/output_cases.json"
+  },
+  "release_state": "not_release_ready",
+  "missing_evidence": [
+    "provider-backed trigger eval",
+    "blind A/B output review decisions",
+    "runtime permission probes",
+    "package checksum and install evidence"
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "skill": "viral-replica",
+  "purpose": "Route-confusion fixture for the loop adapter boundary.",
+  "cases": [
+    {
+      "id": "vr-trigger-loop-pre-seedance-stop",
+      "kind": "positive",
+      "prompt": "把这批孔凤春视频自动跑到 Seedance 网页端交付前停，中间自己检查。",
+      "expected_skill": "viral-replica",
+      "near_neighbor": "video-replication",
+      "why": "The user asks for batch loop operation, self-audit, and pre-generation stop semantics."
+    },
+    {
+      "id": "vr-trigger-runner-audit",
+      "kind": "positive",
+      "prompt": "审计 viral-replica-loop 的 jobs.csv -> runner -> worker -> gate -> state writeback 是否漏 gate。",
+      "expected_skill": "viral-replica",
+      "near_neighbor": "video-replication",
+      "why": "The request is about loop mechanics and gate governance, not video craft."
+    },
+    {
+      "id": "vr-trigger-one-stage-round",
+      "kind": "positive",
+      "prompt": "继续 job-003，只推进一个阶段，跑完 linked worker 和 gate 后停。",
+      "expected_skill": "viral-replica",
+      "near_neighbor": "video-replication",
+      "why": "One-stage runner control is owned by the loop adapter."
+    },
+    {
+      "id": "vr-near-neighbor-craft-only",
+      "kind": "near_neighbor",
+      "prompt": "帮我把这个单条参考视频拆成分镜，写一个 Seedance 2.0 提示词。",
+      "expected_skill": "video-replication",
+      "should_not_route": "viral-replica",
+      "why": "No queue, gate, state, or approval boundary is requested."
+    },
+    {
+      "id": "vr-negative-general-critique",
+      "kind": "negative",
+      "prompt": "评价一下这个短视频的节奏和卖点，不需要生成或跑流程。",
+      "expected_skill": "none",
+      "should_not_route": "viral-replica",
+      "why": "This is analysis only and should not activate the loop."
+    },
+    {
+      "id": "vr-negative-prompt-polish",
+      "kind": "negative",
+      "prompt": "只帮我润色这段 Seedance prompt，不要动任何项目文件。",
+      "expected_skill": "seedance-prompt",
+      "should_not_route": "viral-replica",
+      "why": "Prompt polishing alone should not activate queue state or gates."
+    }
+  ]
+}

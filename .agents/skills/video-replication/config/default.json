@@ -1,0 +1,22 @@
+{
+  "provider": "matpool",
+  "matpool": {
+    "base_url": "https://token.matpool.com/v1",
+    "api_key": "",
+    "model": "GPT-Image-2",
+    "default_quality": "medium",
+    "output_format": "png"
+  },
+  "model": "GPT-Image-2",
+  "size": "1024x1024",
+  "resolution": "1k",
+  "quality": "medium",
+  "format": "png",
+  "background": "auto",
+  "moderation": "low",
+  "timeout": 350,
+  "max_retries": 3,
+  "compress_refs": false,
+  "ref_max_px": 512,
+  "ref_quality": 75
+}

@@ -1,0 +1,217 @@
+{
+  "version": 1,
+  "job_id": "job-012",
+  "isolated_replay": true,
+  "paid_generation_calls": {
+    "gpt_image": 0,
+    "seedance": 0
+  },
+  "shared_state_mutations": 0,
+  "execution_context": {
+    "git_commit": "d94e372a0071081d7f155bb81596f796c45a44d5",
+    "dirty": true,
+    "dirty_path_count": 138,
+    "relevant_file_sha256": {
+      "tools/replay_storyboard_visual_acceptance.py": "5821380a64157a48891b61c419184c128227b2cc0508d1fe5e76395b2aff3f57",
+      "tools/storyboard_visual_acceptance.py": "24dc066e1074c8d5fab997e46fbe0efbd7e70b323fbfab99d1d050b8394fdb0b",
+      "tools/qc_risk_ledger.py": "721fa76a015038a68b759b851ec946d91d0abd504d499978e671066fc5289e78",
+      "tools/checker_review_qc.py": "ff4a481d7e5845416a566a3eb0b74d7b6f165ae44a8dba7a43290cc26ff920ff",
+      "tools/codex_imagegen_contract_qc.py": "6cd76f571bfe7b28b75202ddc021622dffac4573c7833d47b5627fd51338387d",
+      "rules/STAGE_RULES.json": "658beccb96a61f0dc6e487b8c81b323036e376422faf7b8d291c806739fe58ee"
+    }
+  },
+  "before": {
+    "compare_count": 3,
+    "review_count": 4,
+    "checker_invocation_count": 4,
+    "requested_family_count": 4,
+    "reused_family_count": 0,
+    "active_seconds": null,
+    "wait_seconds": null,
+    "timing_note": "legacy reports do not record active or wait time",
+    "compare_files": [
+      "storyboard_geometry_compare.jpg",
+      "cross_part_continuity_compare.jpg",
+      "skincare_progression_compare.jpg"
+    ],
+    "review_files": [
+      "storyboard_geometry_review.json",
+      "cross_part_continuity_review.json",
+      "skincare_progression_review.json",
+      "image_batch_checker_visual_review.json"
+    ]
+  },
+  "changed_state": {
+    "families": [
+      "geometry_appearance",
+      "identity_product_material_integrity",
+      "cross_part_continuity",
+      "skincare_progression"
+    ],
+    "compare_count": 1,
+    "semantic_request_count": 1,
+    "checker_invocation_count": 1,
+    "requested_family_count": 4,
+    "reused_family_count": 0,
+    "accepted_overall": "PASS",
+    "imagegen_contract_validation": "recomputed_real_contract",
+    "imagegen_contract_check_count": 63,
+    "active_seconds": 0.35113,
+    "checker_active_seconds": 0.005494,
+    "wait_seconds": 0.0
+  },
+  "unchanged_state": {
+    "compare_generation_count": 0,
+    "semantic_request_count": 0,
+    "checker_invocation_count": 0,
+    "requested_family_count": 0,
+    "reused_family_count": 4,
+    "overall": "PASS",
+    "active_seconds": 0.099039,
+    "wait_seconds": 0.0,
+    "compare_unchanged": true
+  },
+  "mixed_result": {
+    "overall": "FAIL",
+    "preserved_pass_families": [
+      "geometry_appearance",
+      "cross_part_continuity",
+      "skincare_progression"
+    ],
+    "failed_families": [
+      "identity_product_material_integrity"
+    ],
+    "repair_request_families": [
+      "identity_product_material_integrity"
+    ],
+    "repair_reused_family_count": 3
+  },
+  "deterministic_failure": {
+    "overall": "FAIL",
+    "semantic_request_count": 0,
+    "checker_invocation_count": 0,
+    "failed_checks": [
+      "part1_shot_metadata_grid"
+    ]
+  },
+  "protected_artifacts": {
+    "unchanged": true,
+    "before": {
+      "RUNNER_STATE.json": {
+        "exists": true,
+        "sha256": "2c9d69e5b552a4640d3b4f89d40c6f1137a61c387555888f51fd736e83e25f75"
+      },
+      "STATE.md": {
+        "exists": true,
+        "sha256": "3d58890ba3520e4b4a577d663802400055311a3520b195cc2a9701a2f712f465"
+      },
+      "jobs.csv": {
+        "exists": true,
+        "sha256": "60138e9990b4f13a911bd91ca8d0886eea00084af61c02892e5af63309ddf824"
+      },
+      "output/job-011/final-delivery/孔凤春清洁泥膜_最终版_26s.mp4": {
+        "exists": true,
+        "sha256": "5ae30456b007710ac24a1d78309a83c18ed4be2acea7795babcb06e73232808f"
+      },
+      "output/job-011/seedance/requests/part1_request_prepared.json": {
+        "exists": true,
+        "sha256": "cc9d276e86a152c795155315aa61c0dc778febb9d16071dafb275195672d95a3"
+      },
+      "output/job-011/seedance/requests/part2_request_prepared.json": {
+        "exists": true,
+        "sha256": "553b3a53a04e0bc2e4e4e26d98fe944331021a1948b928eec308cdb01d4327f5"
+      },
+      "output/job-011/seedance/requests/request_qc.json": {
+        "exists": true,
+        "sha256": "9412c3d60e5c64bf249de9f2e7aa175b2b3013b3db2e1d9bd8097c918df65d86"
+      },
+      "output/job-011/seedance/seedance_part1_prompt.txt": {
+        "exists": true,
+        "sha256": "24ef032c13e35e9ee9a9ec95b03b1aac2ace75578fa1c165a9a35645e64e33b2"
+      },
+      "output/job-011/seedance/seedance_part2_prompt.txt": {
+        "exists": true,
+        "sha256": "6184b76574e15ee3c82fa14745cb69c948961d39ff07b8dab105b6ff022318ef"
+      },
+      "output/job-012/seedance/requests/part1_request_prepared.json": {
+        "exists": true,
+        "sha256": "597741ff7ba7ca86eec6d927a553c75c9d62a7392a301df991e7a8efeacc5879"
+      },
+      "output/job-012/seedance/requests/part2_request_prepared.json": {
+        "exists": true,
+        "sha256": "03d7da6c62e4b3df8fd35b013792c35e8e8a3009f6197810e6dd0b04324968fa"
+      },
+      "output/job-012/seedance/requests/request_qc.json": {
+        "exists": true,
+        "sha256": "afee9a7e037e751b2566413549fdd362d2dec4a6632bb194a90241be7f70c935"
+      },
+      "output/job-012/seedance/seedance_part1_prompt.txt": {
+        "exists": true,
+        "sha256": "f6933ef3dfeccd34d9c6bf65cf89b4bd27923f9bcfbc6596d7d54d536b84c08c"
+      },
+      "output/job-012/seedance/seedance_part2_prompt.txt": {
+        "exists": true,
+        "sha256": "6184b76574e15ee3c82fa14745cb69c948961d39ff07b8dab105b6ff022318ef"
+      }
+    },
+    "after": {
+      "RUNNER_STATE.json": {
+        "exists": true,
+        "sha256": "2c9d69e5b552a4640d3b4f89d40c6f1137a61c387555888f51fd736e83e25f75"
+      },
+      "STATE.md": {
+        "exists": true,
+        "sha256": "3d58890ba3520e4b4a577d663802400055311a3520b195cc2a9701a2f712f465"
+      },
+      "jobs.csv": {
+        "exists": true,
+        "sha256": "60138e9990b4f13a911bd91ca8d0886eea00084af61c02892e5af63309ddf824"
+      },
+      "output/job-011/final-delivery/孔凤春清洁泥膜_最终版_26s.mp4": {
+        "exists": true,
+        "sha256": "5ae30456b007710ac24a1d78309a83c18ed4be2acea7795babcb06e73232808f"
+      },
+      "output/job-011/seedance/requests/part1_request_prepared.json": {
+        "exists": true,
+        "sha256": "cc9d276e86a152c795155315aa61c0dc778febb9d16071dafb275195672d95a3"
+      },
+      "output/job-011/seedance/requests/part2_request_prepared.json": {
+        "exists": true,
+        "sha256": "553b3a53a04e0bc2e4e4e26d98fe944331021a1948b928eec308cdb01d4327f5"
+      },
+      "output/job-011/seedance/requests/request_qc.json": {
+        "exists": true,
+        "sha256": "9412c3d60e5c64bf249de9f2e7aa175b2b3013b3db2e1d9bd8097c918df65d86"
+      },
+      "output/job-011/seedance/seedance_part1_prompt.txt": {
+        "exists": true,
+        "sha256": "24ef032c13e35e9ee9a9ec95b03b1aac2ace75578fa1c165a9a35645e64e33b2"
+      },
+      "output/job-011/seedance/seedance_part2_prompt.txt": {
+        "exists": true,
+        "sha256": "6184b76574e15ee3c82fa14745cb69c948961d39ff07b8dab105b6ff022318ef"
+      },
+      "output/job-012/seedance/requests/part1_request_prepared.json": {
+        "exists": true,
+        "sha256": "597741ff7ba7ca86eec6d927a553c75c9d62a7392a301df991e7a8efeacc5879"
+      },
+      "output/job-012/seedance/requests/part2_request_prepared.json": {
+        "exists": true,
+        "sha256": "03d7da6c62e4b3df8fd35b013792c35e8e8a3009f6197810e6dd0b04324968fa"
+      },
+      "output/job-012/seedance/requests/request_qc.json": {
+        "exists": true,
+        "sha256": "afee9a7e037e751b2566413549fdd362d2dec4a6632bb194a90241be7f70c935"
+      },
+      "output/job-012/seedance/seedance_part1_prompt.txt": {
+        "exists": true,
+        "sha256": "f6933ef3dfeccd34d9c6bf65cf89b4bd27923f9bcfbc6596d7d54d536b84c08c"
+      },
+      "output/job-012/seedance/seedance_part2_prompt.txt": {
+        "exists": true,
+        "sha256": "6184b76574e15ee3c82fa14745cb69c948961d39ff07b8dab105b6ff022318ef"
+      }
+    }
+  },
+  "conclusion": "Three legacy visual compare/review paths converge to one canonical compare and one batched checker on change; unchanged inputs reuse all four accepted semantic families without regenerating compare context."
+}

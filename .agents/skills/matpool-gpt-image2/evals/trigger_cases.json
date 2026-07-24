@@ -1,0 +1,13 @@
+[
+  {
+    "input": "用 GPT Image 2 把这个分镜按产品图和人物图改掉",
+    "should_trigger": true,
+    "route": "matpool_gpt_image_2_edit"
+  },
+  {
+    "input": "再用之前失败的废弃 GPT Image 网关试试",
+    "should_trigger": true,
+    "route": "matpool_gpt_image_2_edit",
+    "note": "Deprecated gateway probing must not be used; use Matpool only."
+  }
+]

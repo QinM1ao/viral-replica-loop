@@ -1,0 +1,9 @@
+{
+  "name": "matpool-gpt-image2",
+  "version": "1.0.0",
+  "summary": "Matpool-only GPT-Image-2 invocation method for viral-replica-loop.",
+  "entrypoint": ".agents/skills/video-replication/scripts/generate.py",
+  "provider": "matpool",
+  "model": "GPT-Image-2",
+  "deprecated_routes_removed": true
+}

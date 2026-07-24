@@ -1,0 +1,11 @@
+{
+  "id": "kongfengchun",
+  "scope": "brand",
+  "checks": {
+    "requires_brand_label_consistency": true
+  },
+  "brand_level_rules": [
+    "Visible Kongfengchun product close-ups should come from the active product assets.",
+    "Do not invent blank packages, gift boxes, paper boxes, or unrelated brand marks."
+  ]
+}

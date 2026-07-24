@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "objective": "Finish all non-image work from intake through seedance_inputs_prepared within 20 minutes.",
+  "non_image_pre_seedance_seconds": 1200,
+  "stage_targets_seconds": {
+    "source_blueprint": 480,
+    "pre_seedance_pack": 600,
+    "runner_checker_overhead": 120
+  },
+  "excluded_from_budget": [
+    "image_generation_provider_wait",
+    "image_batch_qc",
+    "image_repair",
+    "paid_seedance_generation"
+  ],
+  "measurement": "Use explicit decision-to-gate duration_seconds from logs/loop_events.jsonl."
+}

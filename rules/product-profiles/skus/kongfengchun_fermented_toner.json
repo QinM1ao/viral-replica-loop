@@ -1,0 +1,30 @@
+{
+  "id": "kongfengchun_fermented_toner",
+  "scope": "sku",
+  "usage_action": "show the Kongfengchun fermented essence toner bottle, watery toner, palm dispensing, and face patting",
+  "checks": {
+    "requires_afterwash_ref": false,
+    "requires_mud_checks": false,
+    "requires_skincare_progression": false,
+    "requires_finger_jar_application": false
+  },
+  "visible_text_patterns": [
+    "PORTULACA OLERACEA FERMENTED ESSENCE TONER",
+    "马齿苋发酵精华水",
+    "52%马齿苋",
+    "屏障修护",
+    "敏肌适用"
+  ],
+  "prompt_required_groups": [
+    {
+      "name": "target_product",
+      "patterns": [
+        "孔凤春",
+        "发酵水",
+        "精华水",
+        "Kongfengchun",
+        "toner"
+      ]
+    }
+  ]
+}

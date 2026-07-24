@@ -1,0 +1,291 @@
+{
+  "schema_version": 1,
+  "skill": "video-replication",
+  "execution_kind": "recorded_fixture",
+  "cases": [
+    {
+      "id": "vrep-output-shot-label-fast-path",
+      "task": "Normalize wrong Shot navigation numbers on an otherwise accepted storyboard without reopening image-content work.",
+      "input_files": [
+        ".agents/skills/video-replication/references/codex-imagegen-direct.md",
+        "tools/restore_storyboard_shot_labels.py",
+        "tools/hash_gated_visual_qc.py",
+        "output/job-012/checks/part1_shot_label_restore.json",
+        "output/job-012/checks/part2_shot_label_restore.json"
+      ],
+      "baseline_failures": [
+        "May ask the image model to repair navigation text and alter otherwise accepted pixels.",
+        "May inspect raw Matpool output, discover a label typo, normalize it, then repeat geometry, continuity, skincare, identity, and product reviews.",
+        "May invalidate all content QC because PNG bytes changed only inside Shot-label bars."
+      ],
+      "with_skill_assertions": [
+        "Every Matpool candidate is deterministically normalized before its first content review.",
+        "The evidence proves zero changed pixels outside label bars and equal before/after panel-content fingerprints.",
+        "A label-only repair skips Matpool, manual 12-label OCR, and all content-heavy QC.",
+        "Hash-gated reuse accepts a changed full-file hash only when the verified panel-content fingerprint and label-band scope remain unchanged.",
+        "A real panel-content change still invalidates prior content QC."
+      ],
+      "actual_validation_report": ".agents/skills/video-replication/reports/shot_label_fast_path_validation_20260720.md",
+      "evidence_status": "file-backed actual validation",
+      "missing_evidence": []
+    },
+    {
+      "id": "vrep-output-story-before-prompt",
+      "task": "Create voiceover and Seedance prompts from a reference video.",
+      "input_files": [
+        ".agents/skills/video-replication/SKILL.md",
+        ".agents/skills/video-replication/references/seedance-20-prompt-standard.md",
+        ".agents/skills/video-replication/references/source-script-lock.md",
+        "tools/pre_seedance_pack.py"
+      ],
+      "baseline_failures": [
+        "May write generic sales copy from storyboard images only.",
+        "May omit source ASR, subtitles, and story rhythm.",
+        "May preserve only the source line's sales function while rewriting its wording, repetitions, speaker turns, and cadence.",
+        "May alternate between a role-definition prompt preamble and free-form calibration wording."
+      ],
+      "with_skill_assertions": [
+        "Story analysis precedes voiceover and Seedance prompt writing.",
+        "A v5 director plan uses script_fidelity.mode=source_locked and every speech group declares line_edits.",
+        "Each target line equals the evidence-confirmed source line after only the declared localized edits; semantic-equivalent rewrites fail.",
+        "Voiceover, shot-line map, and final prompts mechanically reuse the verified target line without another rewrite.",
+        "The final prompt reference preamble uses definition, lock/control, and exclusion statements and avoids free-form calibration wording.",
+        "Final prompt text avoids loop-only labels."
+      ],
+      "actual_validation_report": "docs/2026-07-22-source-locked-storyboard-derived-identities.md",
+      "evidence_status": "file-backed fixture",
+      "missing_evidence": [
+        "model-executed baseline output",
+        "model-executed with-skill output",
+        "blind reviewer decision"
+      ]
+    },
+    {
+      "id": "vrep-output-storyboard-derived-multiperson-identities",
+      "task": "Replicate a source with many different people when the user provides product images but no person or model images.",
+      "input_files": [
+        ".agents/skills/video-replication/references/storyboard-derived-identities.md",
+        "workers/image_batch_worker.md",
+        "tools/visual_asset_manifest_qc.py",
+        "output/research-competitor-cases-20260722/experiments/ice-spray2-storyboard-derived-identities/改图与人物图审核.md"
+      ],
+      "baseline_failures": [
+        "May block intake because the person folder is absent.",
+        "May invent one universal protagonist and replace every source character with that identity.",
+        "May crop old source faces or storyboard panels and treat them as new identity references.",
+        "May generate each Part independently and lose a recurring role across Part boundaries.",
+        "May upload every derived identity to every Part regardless of whether that person appears."
+      ],
+      "with_skill_assertions": [
+        "Omitted person assets are normalized to person_assets=storyboard_derived.",
+        "A role map preserves each source role's gender, story function, Part membership, and identity-required decision before ImageGen.",
+        "The first storyboard edit uses the source Part storyboard and product refs without a person ref, while replacing old people with new photoreal same-role identities.",
+        "Dedicated identities are generated only after the source Part storyboard passes and bind their current-job approved storyboard provenance.",
+        "A recurring role reuses one derived identity during later-Part storyboard editing and Seedance handoff.",
+        "Each Part handoff includes only the identity_role refs used in that Part, and background extras remain generic or de-identified."
+      ],
+      "actual_validation_report": "docs/2026-07-22-source-locked-storyboard-derived-identities.md",
+      "evidence_status": "file-backed actual validation",
+      "missing_evidence": [
+        "provider-backed Seedance video using the derived identity handoff",
+        "blind reviewer decision"
+      ]
+    },
+    {
+      "id": "vrep-output-story-to-seedance-final-standard",
+      "task": "Create final Seedance 2.0 prompts for a 30s product-replacement replica with real product refs, identity refs, and reference audio.",
+      "input_files": [
+        ".agents/skills/video-replication/SKILL.md",
+        ".agents/skills/video-replication/references/seedance-20-prompt-standard.md",
+        "output/job-001/剧情分析/剧情分析.md",
+        ".agents/skills/video-replication/references/examples/seedance-20-source-faithful-part1.txt"
+      ],
+      "baseline_failures": [
+        "May write a generic product ad from storyboard images without preserving source hook, proof beats, or offer timing.",
+        "May fail to distinguish narration from in-frame synchronous speech.",
+        "May let a product white-background reference become a static packshot scene.",
+        "May use ambiguous visual alternatives such as handheld-or-tabletop and palm-or-handback.",
+        "May let one long speech group collapse Shot 02-10 into a single overloaded execution block.",
+        "May repeat or shorten a difficult brand name differently across Parts."
+      ],
+      "with_skill_assertions": [
+        "A shot-line map is derived from story analysis, ASR/subtitles, visual timeline, product profile, voiceover, seam notes, and approved references before final prompt writing.",
+        "Every conversion-critical source beat is represented inside an ordered time and numbered-Shot block: hook, scene transition, first-person operation, product reveal, use proof, label proof, result proof, phone/social proof, and offer close when present.",
+        "Every execution block binds visual and voice; sound effect is optional and appears only for a useful visible action sound. Every target action has source or explicit product-translation evidence.",
+        "Every spoken line is assigned a speaker mode: narration, in-frame sync, supporting role sync, or group reaction.",
+        "Product references calibrate packaging identity, label text, bottle proportion, or material only; storyboard reference controls composition, hand action, and product appearance rhythm.",
+        "Key product-action and proof beats avoid ambiguous alternatives and use positive visible motion.",
+        "Director plans author speech_groups and execution_blocks separately; each execution block covers at most five storyboard panels, no speech group crosses blocks, and no block crosses a narration/sync boundary.",
+        "Product-name mentions preserve the source count, location, sentence structure, and repetitions. spoken_product_anchor marks one product-reference proof beat without deleting or rewriting other source mentions."
+      ],
+      "actual_validation_report": "output/job-001/experiments/av_bound_source_faithful_part1_test_20260715/validation_report.md",
+      "evidence_status": "file-backed fixture",
+      "missing_evidence": [
+        "model-executed baseline output",
+        "model-executed with-skill output",
+        "blind reviewer decision"
+      ]
+    },
+    {
+      "id": "vrep-output-source-storyboard-edit",
+      "task": "Generate or repair image-stage storyboard assets.",
+      "input_files": [
+        ".agents/skills/video-replication/SKILL.md",
+        ".agents/skills/video-replication/references/codex-imagegen-direct.md"
+      ],
+      "baseline_failures": [
+        "May generate a new collage instead of editing the source storyboard.",
+        "May keep old product, old tool, old wardrobe, subtitles, or wrong mud color.",
+        "May let the identity or product reference background replace the original source scene."
+      ],
+      "with_skill_assertions": [
+        "The source storyboard controls layout, shot order, framing, and action rhythm only.",
+        "The approved identity and product references replace old person, product, tool, mud, and text.",
+        "The Matpool prompt is built from the validated rolemap structure and includes a hard source-scene rule.",
+        "The prompt states that product, identity, and after-wash references must not transfer their own room, background, lighting, crop, selfie, packshot, or scene composition.",
+        "Failed recomposed, scene-changed, or squeezed candidates are discarded instead of repaired forward."
+      ],
+      "evidence_status": "file-backed fixture",
+      "missing_evidence": [
+        "blind reviewer decision"
+      ]
+    },
+    {
+      "id": "vrep-output-fast-pre-seedance-pack",
+      "task": "Advance a 30s replicated product video after image batch PASS to generation-ready assets as fast as possible without bypassing quality gates.",
+      "input_files": [
+        ".agents/skills/video-replication/SKILL.md",
+        "rules/STAGE_RULES.json",
+        "workers/pre_seedance_pack_worker.md",
+        "gates/pre_seedance_pack_gate.md",
+        "tools/run_next_loop_round.py"
+      ],
+      "baseline_failures": [
+        "May continue serially through voiceover, seam, Seedance prompt, audio boundary, and request QC as five separate default stages.",
+        "May rerun heavy visual QC even though active final image hashes and mappings did not change.",
+        "May run final generated-video ASR by default before delivery."
+      ],
+      "with_skill_assertions": [
+        "The default rule for image_qc_passed uses canonical_stage=pre_seedance_pack and next_expected=seedance_inputs_prepared.",
+        "The Pre-Seedance pack output includes voiceover, shot-line map, seam notes, material-role table, per-Part prompts, reference-audio boundary evidence when sound is enabled, and request JSON or web-side handoff.",
+        "Heavy visual QC is reused by active image hashes and mappings unless active image, manifest, material-role, prompt-reference role, or user-visible defect state changed.",
+        "Final delivery QC is a fast technical check and final ASR is optional only for audio/script verification or targeted audio defects."
+      ],
+      "actual_validation_report": ".agents/skills/video-replication/reports/fast_pipeline_validation_20260703.md",
+      "evidence_status": "file-backed fixture",
+      "missing_evidence": [
+        "model-executed baseline output",
+        "blind reviewer decision"
+      ]
+    },
+    {
+      "id": "vrep-output-skincare-progression",
+      "task": "Replicate a skincare or cleansing mud-mask video.",
+      "input_files": [
+        ".agents/skills/video-replication/references/skincare-beauty-replication.md",
+        "tools/skincare_progression_qc.py"
+      ],
+      "baseline_failures": [
+        "May make pre-wash skin already too clean or bright.",
+        "May fail to show improvement after wash or wipe proof."
+      ],
+      "with_skill_assertions": [
+        "Pre-wash state remains visibly pre-use or problem-bearing.",
+        "After-wash improvement appears only after cleaning evidence.",
+        "White thick mud rules are preserved for mud-mask jobs."
+      ],
+      "evidence_status": "file-backed fixture",
+      "missing_evidence": [
+        "provider-backed output run",
+        "blind reviewer decision"
+      ]
+    },
+    {
+      "id": "vrep-output-visible-label-role-map",
+      "task": "Repair a GPT Image storyboard where product label text disappeared and a male supporting role was replaced by the female protagonist identity.",
+      "input_files": [
+        ".agents/skills/video-replication/SKILL.md",
+        ".agents/skills/video-replication/references/replication-lessons.md",
+        "output/job-001/checks/part1_label_rolemap_repair_contract_qc.json"
+      ],
+      "baseline_failures": [
+        "May accept a blank or pseudo-text product bottle because the prompt only says label clear.",
+        "May apply the approved protagonist identity to every person in a multi-person source storyboard.",
+        "May continue repairing from the failed blank-label candidate instead of restarting from the source storyboard."
+      ],
+      "with_skill_assertions": [
+        "Product profiles with visible_text_patterns require major brand/product-name anchors and the real label design in designated hero close-ups; distant, oblique, multi-bottle, and storyboard-scale microtext is visual-match-only.",
+        "The contract review includes product_visible_text=true and no_blank_label=true.",
+        "A source-story role map keeps the approved identity on the protagonist/product-host role only and preserves secondary role gender.",
+        "Candidates that changed label, role structure, scene, or geometry are discarded and rebuilt from the source Part storyboard."
+      ],
+      "evidence_status": "file-backed fixture",
+      "missing_evidence": [
+        "blind reviewer decision"
+      ]
+    },
+    {
+      "id": "vrep-output-kongfengchun-final-26s-standard",
+      "task": "Produce and assemble the validated two-Part 26-second male-presenter Kongfengchun cleansing mud-mask replica, including a physical application hook, wash result, proof beats, short bottle B-roll, and final product close.",
+      "input_files": [
+        ".agents/skills/video-replication/references/kongfengchun-final-26s-standard.md",
+        ".agents/skills/video-replication/references/examples/seedance-20-kongfengchun-part1-validated.txt",
+        ".agents/skills/video-replication/references/examples/seedance-20-kongfengchun-part2-validated.txt",
+        "output/job-011/seedance/director_plan.json",
+        "output/job-011/final-delivery/最终版制作流程.md",
+        "output/job-011/final-delivery/qc/final_qc.md"
+      ],
+      "baseline_failures": [
+        "May describe the hook as generic application without contact, fingertip travel, or visible mud left on skin.",
+        "May rewrite or simplify all accepted Part1 blocks while trying to repair only the opening.",
+        "May weaken the requested commercial result with wording such as retain realistic pores or skin texture.",
+        "May let the identity reference transfer its bathroom or selfie background into source-scene Shots.",
+        "May merge in-frame presenter speech, still-life B-roll narration, and the final presenter close into one overloaded block.",
+        "May restart a product push after B-roll, making the source hard cut feel discontinuous.",
+        "May invent cross-Part continuation or regenerate an already accepted Part."
+      ],
+      "with_skill_assertions": [
+        "The Part1 hook specifies contact location, fingertip motion, and visible white-mud residue for both rapid applications.",
+        "Prompt-only repair declares one allowed time-and-Shot block; every other accepted block and accepted Part remains unchanged.",
+        "The identity reference locks the same male presenter and clothing without controlling background or after-wash skin state.",
+        "The after-wash Shot explicitly reaches the profile-defined flawless commercial state while preserving presenter identity.",
+        "Shot 11 still-life B-roll is a standalone execution block because scene, visual function, and speaker mode change.",
+        "Shot 10 ends product-close and Shot 12 starts in the same source room at matched product-close framing without restarting the push.",
+        "The prompt contains no BGM and omits placeholder no-sound-effect lines.",
+        "Part1 and Part2 are independent generation tasks; the final video concatenates only the accepted Part files and passes technical seam, freeze, and black-frame QC.",
+        "File hashes remain internal fingerprints for stale-evidence and provenance checks; they are not treated as generation seeds or user workflow steps."
+      ],
+      "actual_validation_report": ".agents/skills/video-replication/reports/actual_validation_20260717_kongfengchun_final_26s.md",
+      "evidence_status": "provider-backed actual validation",
+      "missing_evidence": [
+        "blind reviewer decision"
+      ]
+    },
+    {
+      "id": "vrep-output-package-slit-and-wetwipe-action-chain",
+      "task": "Preserve the source-locked physical action chain where a knife visibly cuts an outer package, the product exits through that slit, and a wet wipe is attached to, peeled from, removed from, then followed by spreading the remaining liquid on the back of the hand.",
+      "input_files": [
+        "output/job-013/剧情分析/source_rhythm.json",
+        "output/job-013/seedance/director_plan.json",
+        "output/job-013/seedance/seedance_part1_prompt.txt",
+        "output/job-013/checks/part1_slit_extraction_final_delivery.md"
+      ],
+      "baseline_failures": [
+        "May keep only a generic product-unboxing function and omit the visible knife contact, cut, or opened slit.",
+        "May show the bottle lifted normally from the top instead of traveling through the newly cut front opening.",
+        "May collapse the wet-wipe proof into a palm holding liquid or skip the attach, edge-grip, peel, removal, and residual-liquid states.",
+        "May reintroduce the single-frame blue-clothed source editing error as a real story character."
+      ],
+      "with_skill_assertions": [
+        "The physical-change beat cites distinct before, peak, and after source frames for knife contact, visible cut opening, and bottle extraction through that opening.",
+        "Shot 07 visibly creates the slit and Shot 08 visibly moves the product through the same slit; neither can be represented by a generic open-package or top-lift frame.",
+        "Shot 09 begins with a wet wipe fully attached to the back of the hand, Shot 10 grips and peels its edge, Shot 11 shows it removed with liquid remaining, and Shot 12 spreads that remaining liquid.",
+        "The source error beat sr009b remains excluded and maps to no target Shot.",
+        "The final source_locked prompt preserves the ordered action states and changes only product-specific facts such as the bottle, package, label, and liquid name."
+      ],
+      "actual_validation_report": "output/job-013/checks/part1_slit_extraction_final_delivery.md",
+      "evidence_status": "provider-backed actual validation with user-accepted local tool-shape warning",
+      "missing_evidence": []
+    }
+  ]
+}

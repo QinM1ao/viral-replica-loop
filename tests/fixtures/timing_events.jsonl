@@ -1,0 +1,7 @@
+{"type":"decision","time":"2026-06-22T10:00:00","job":"job-101","stage":"image_batch_qc","decision":"continue","gate":"gates/image_batch_gate.md","reason":"matched stage rule"}
+{"type":"gate_result","time":"2026-06-22T10:45:30","job":"job-101","stage":"image_batch_qc","gate":"gates/image_batch_gate.md","result":"STOP","failure_type":"provider_524","retry_variable":"source_storyboard_edit_route","note":"deprecated provider 524; no candidate promoted"}
+{"type":"decision","time":"2026-06-22T10:50:00","job":"job-101","stage":"voiceover","decision":"continue","gate":"gates/voiceover_gate.md","reason":"matched stage rule"}
+{"type":"gate_result","time":"2026-06-22T10:52:05","job":"job-101","stage":"voiceover","gate":"gates/voiceover_gate.md","result":"PASS","failure_type":null,"retry_variable":null,"note":"Revalidated existing voiceover by hash"}
+{"type":"decision","time":"2026-06-22T11:00:00","job":"job-102","stage":"generation_approval","decision":"stop","gate":"gates/cost_approval_gate.md","reason":"Seedance generation requires explicit client approval"}
+{"type":"decision","time":"2026-06-22T11:10:00","job":"job-101","stage":"request_qc","decision":"continue","gate":"gates/request_gate.md","reason":"matched stage rule"}
+{"type":"gate_result","time":"2026-06-22T11:15:00","job":"job-101","stage":"request_qc","gate":"gates/request_gate.md","result":"FAIL","failure_type":"missing_manifest_evidence","retry_variable":"approved_visual_manifest","note":"manifest evidence missing"}

@@ -1,0 +1,42 @@
+{
+  "job_id": "job-008",
+  "part": "part2",
+  "items": [
+    {
+      "role": "storyboard",
+      "path": "output/job-008/seedance_web_final/Part2_上传素材/01_图片1_Part2分镜节奏.png",
+      "source": "output/job-008/final-images/part2_seedance_ref.png",
+      "sha256": "a35ddd3c408db07bdf43ad3cfdd5bff4de3911fb9c2aab76ba23ca8bb70ba7e7"
+    },
+    {
+      "role": "product_front",
+      "path": "output/job-008/seedance_web_final/Part2_上传素材/02_图片2_孔凤春清洁泥膜正面.png",
+      "source": "output/shared/kongfengchun/products/kongfengchun_clean_mud_mask/product_front_tight.png",
+      "sha256": "b9d0d448ef3f3ec667fb7e11ae9249634e4d9010ba5a18b4c3d54bf78469e35b"
+    },
+    {
+      "role": "product_open_mud",
+      "path": "output/job-008/seedance_web_final/Part2_上传素材/03_图片3_开盖白泥.png",
+      "source": "output/shared/kongfengchun/products/kongfengchun_clean_mud_mask/product_open_white_mud_tight.png",
+      "sha256": "313932316fe801f1b413c5a859a526475be02107a0146e78a431b7242a4d8910"
+    },
+    {
+      "role": "identity_ref",
+      "path": "output/job-008/seedance_web_final/Part2_上传素材/04_图片4_男模身份content4.png",
+      "source": "output/shared/kongfengchun/identities/kongfengchun_male_content4/identity_ref.png",
+      "sha256": "08187b6d4f42fe6208e3c94fbec15de644d3fe05bfbf634aa42df3488437e448"
+    },
+    {
+      "role": "afterwash_face",
+      "path": "output/job-008/seedance_web_final/Part2_上传素材/05_图片5_洗后脸部特写.png",
+      "source": "output/shared/kongfengchun/identities/kongfengchun_male_content4/afterwash_face_closeup.png",
+      "sha256": "d19c3c5b7ce299b23e003acbe5e74a15f617f5f5cdd983d054036559159a8fbf"
+    },
+    {
+      "role": "reference_audio",
+      "path": "output/job-008/seedance_web_final/Part2_上传素材/06_音频1_Part2原爆款声音参考.mp3",
+      "source": "output/job-008/audio-boundary/reference_audio_part2.mp3",
+      "sha256": "5a649be1709d7055a28464cb980f668aa2a17ab8fd15a93782b9ac5b04554a4d"
+    }
+  ]
+}

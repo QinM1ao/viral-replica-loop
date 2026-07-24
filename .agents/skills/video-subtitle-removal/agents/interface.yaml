@@ -1,0 +1,21 @@
+interface:
+  display_name: "Video Subtitle Removal"
+  short_description: "擦除视频硬字幕并检查修复质量"
+  default_prompt: "Use $video-subtitle-removal to remove the subtitles from this video and verify the repaired result."
+compatibility:
+  canonical_format: "codex-skill-v1"
+  adapter_targets:
+    - codex
+  activation:
+    mode: path_scoped
+    paths:
+      - "."
+  execution:
+    context: inline
+    shell: bash
+  trust:
+    source_tier: local
+    remote_inline_execution: forbid
+    remote_metadata_policy: official-sources-only
+  degradation:
+    codex: "Read SKILL.md directly and invoke the installed volcengine-ai-mediakit dependency."
