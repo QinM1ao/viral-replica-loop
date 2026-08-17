@@ -27,6 +27,7 @@ For a clean detection branch:
 - The active output is the unchanged finished video.
 - The final file has zero subtitle streams.
 - The independent `subtitle_presence_classification` family passes against the current master and its full-timeline evidence; maker self-classification is not sufficient.
+- The same full-timeline checker found no obvious wrong person, wrong product, broken material, or visible seam break; this is not a separate review.
 
 For a `burned_in` branch:
 
@@ -38,6 +39,7 @@ For a `burned_in` branch:
 - Full visual QC passes on every former subtitle interval and at least two high-risk temporal windows.
 - Every high-risk window has hash-bound timestamped frame evidence at 8fps or denser, and the independent `subtitle_repair_quality` checker family passes for the exact source/output/QC hashes.
 - The result has no residual glyphs, blur band, scene-text damage, foreground damage, or repair flicker.
+- The same batched checker found no obvious wrong person, wrong product, broken material, or visible seam break.
 - `automatic_retry_allowed=false`.
 
 ## FAIL

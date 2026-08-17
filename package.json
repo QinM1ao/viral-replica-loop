@@ -1,0 +1,19 @@
+{
+  "name": "viral-replica-plugin-source",
+  "version": "0.0.0-private",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sandcastle": "tsx .sandcastle/afk_control.ts start",
+    "sandcastle:run": "tsx .sandcastle/main.ts",
+    "sandcastle:status": "tsx .sandcastle/afk_control.ts status",
+    "sandcastle:reset": "tsx .sandcastle/afk_control.ts reset",
+    "sandcastle:list": "tsx .sandcastle/main.ts --list",
+    "sandcastle:build": "sandcastle docker build-image",
+    "test:sandcastle": "python3 -m unittest discover -s .sandcastle/tests -p 'test_*.py' && tsx --test .sandcastle/tests/test_orchestration.ts"
+  },
+  "devDependencies": {
+    "@ai-hero/sandcastle": "0.12.0",
+    "tsx": "4.23.1"
+  }
+}

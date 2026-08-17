@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 import wave
+import hashlib
 from pathlib import Path
 
 
@@ -12,9 +13,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
 from seedance_taskcode_runner import (  # noqa: E402
+    prior_submission_evidence,
     reference_audio_urls,
     validate_existing_preflight,
     validate_reference_audio_urls,
+    validate_source_fidelity_qc,
 )
 
 
@@ -98,7 +101,7 @@ class SeedanceTaskcodeRunnerAudioPreflightTest(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("ffprobe"), "ffprobe is required")
     def test_accepts_decodable_reference_audio(self):
-        url = "https://example.com/reference.wav"
+        url = "https://example.com/reference.mp3"
         reports = validate_reference_audio_urls(
             self.request(url),
             FakeClient({url: wav_bytes()}),
@@ -109,9 +112,40 @@ class SeedanceTaskcodeRunnerAudioPreflightTest(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("ffprobe"), "ffprobe is required")
     def test_rejects_reference_audio_over_fifteen_seconds(self):
-        url = "https://example.com/too-long.wav"
+        url = "https://example.com/too-long.mp3"
         with self.assertRaisesRegex(ValueError, "15.00 seconds"):
             validate_reference_audio_urls(
                 self.request(url),
                 FakeClient({url: wav_bytes(15.1)}),
             )
+
+    def test_detects_prior_submission_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertEqual(prior_submission_evidence(root), [])
+            evidence = root / "task_key.txt"
+            evidence.write_text("task-key\n", encoding="utf-8")
+            self.assertEqual(prior_submission_evidence(root), [evidence])
+
+    def test_source_fidelity_evidence_must_bind_request_prompt_and_transcript(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "source_fidelity_qc.json"
+            expected = "完整台词结尾"
+            prompt_text = "完整提示词"
+            report = {
+                "overall": "PASS",
+                "prompt_sha256": hashlib.sha256(prompt_text.encode("utf-8")).hexdigest(),
+                "expected_transcript": expected,
+                "source_rhythm_sha256": "rhythm",
+            }
+            path.write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
+            request = self.request("https://example.com/reference.mp3")
+            param = json.loads(request["body"]["param"])
+            param["content"][0]["text"] = prompt_text
+            request["body"]["param"] = json.dumps(param)
+            request["source_fidelity_qc_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+            request["expected_transcript_sha256"] = hashlib.sha256(expected.encode("utf-8")).hexdigest()
+            self.assertEqual(validate_source_fidelity_qc(request, path)["overall"], "PASS")
+            request["source_fidelity_qc_sha256"] = "stale"
+            with self.assertRaisesRegex(ValueError, "hash"):
+                validate_source_fidelity_qc(request, path)

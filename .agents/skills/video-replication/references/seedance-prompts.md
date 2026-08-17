@@ -133,7 +133,7 @@ ffmpeg -y -i "<原片音频.wav>" \
 
 ```bash
 source "$HOME/.config/wujieai/env"
-python3 ~/.codex/skills/seedance-magic-mirror-video-prompt/scripts/run_seedance_magic_mirror.py \
+python3 /Users/qmio/.codex/skills/seedance-magic-mirror-video-prompt/scripts/run_seedance_magic_mirror.py \
   --prompt-file "<Part提示词.txt>" \
   --image-file "<分镜或参考图.jpg>" \
   --output "<输出Part.mp4>" \
@@ -154,7 +154,7 @@ python3 ~/.codex/skills/seedance-magic-mirror-video-prompt/scripts/run_seedance_
 ```bash
 source "$HOME/.config/wujieai/env"
 env -i PATH="$PATH" HOME="$HOME" GATEWAY_API_KEY="$GATEWAY_API_KEY" \
-python3 ~/.codex/skills/seedance/scripts/seedance.py \
+python3 /Users/qmio/.codex/skills/seedance/scripts/seedance.py \
   --prompt-file "<Part提示词.txt>" \
   --output "<输出Part.mp4>" \
   --model ep-20260521101914-nwv8j \

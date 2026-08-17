@@ -17,12 +17,18 @@ required=(
   QC_RULES.md
   PRODUCT_CONSTRAINTS.md
   rules/STAGE_RULES.json
+  rules/FACE_EXPRESSION_DETECTOR.json
   scripts/new-task.py
+  scripts/sync-inbox-to-jobs.py
   scripts/export-client-workspace.sh
   scripts/release-check.sh
   scripts/run-outer-loop.sh
   scripts/skill-release-check.py
+  tools/job_intake.py
+  tools/lifecycle_registry.py
   tools/run_next_loop_round.py
+  tools/detect_face_expression.py
+  tools/run_face_expression_detector.py
   tools/checker_review_qc.py
   tools/record_review_feedback.py
   tools/audio_duration_qc.py

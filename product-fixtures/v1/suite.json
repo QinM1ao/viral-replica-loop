@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "suite_id": "viral-replica-non-client-parity-v1",
+  "fixture_families": [
+    "PF-01 core-audible-source-locked",
+    "PF-02 branch-table",
+    "PF-03 failure-mutations",
+    "PF-04 local-finalization",
+    "PF-05 sealed-independent-checker-verdicts"
+  ],
+  "shared_binding": {
+    "fixture_suite_id": "viral-replica-non-client-parity-v1",
+    "runtime_contract": {
+      "path": "shared/runtime_contract.json",
+      "sha256": "291bf930980e6814a7fa03e2809faf67374aaa6aa85a08ab94ee8066b401ef22"
+    },
+    "effective_profile": {
+      "path": "shared/effective_profile.json",
+      "sha256": "afbcb25b7c0ad50e6abeef782993c10fc7af6c4cb6338ccdf90466bd66eee414"
+    },
+    "approval": {
+      "path": "shared/approval.json",
+      "sha256": "11cdb6aad14d87028bea8eab8235fc852c969cf17c629f7342fd7f739b3f8df4"
+    },
+    "expected_logical_roles": {
+      "path": "shared/expected_logical_roles.json",
+      "sha256": "bf1940efac563e3648bb0fea540b6e5af51229b79ed3a84357f227eca712ff48"
+    },
+    "provider_request": {
+      "path": "provider/request.json",
+      "sha256": "0505cc39c68365c254a4faca9593d321522901f234a325864eb39f1b1453f10f"
+    },
+    "wujie_request_contract": {
+      "path": "provider/wujie_request_contract.json",
+      "sha256": "7f62cced97fb7779ae277004bca753cd00da4f929c7d06cb1d1c481a8f8b6804"
+    },
+    "wujie_response": {
+      "path": "provider/wujie_response.json",
+      "sha256": "12c33d641e728339bcea5217f07c2cb46cc0278a6e6d3a15540540cdc1ad7323"
+    },
+    "sealed_checker_verdicts": {
+      "path": "checker/sealed_stage_verdicts.json",
+      "sha256": "f3871de82296a1ee5229658f4723fc3c2ee599797b22c42531e44b9fc091083e"
+    },
+    "reference_order": [
+      "source_video",
+      "source_audio",
+      "product_reference"
+    ]
+  },
+  "layout_bindings": {
+    "LegacyLayout": {
+      "fixture_suite_id": "viral-replica-non-client-parity-v1",
+      "binding": "shared_binding"
+    },
+    "CanonicalLayout": {
+      "fixture_suite_id": "viral-replica-non-client-parity-v1",
+      "binding": "shared_binding"
+    }
+  },
+  "provider_recorder": "provider/recording.json",
+  "image_provider_recorder": "provider/image_recording.json",
+  "consecutive_runs_per_layout": 2,
+  "expected_side_effects": {
+    "external_effects": [],
+    "paid_task_count": 0,
+    "media_generation_task_count": 0
+  }
+}

@@ -1,0 +1,18 @@
+interface:
+  display_name: "MiniMax H3 Replica"
+  short_description: "用 MiniMax H3 直接复刻参考视频并完成交付"
+  default_prompt: "Use $minimax-h3-replica to replicate this source video with MiniMax H3 using my person, product, and audio assets."
+  primary_outputs:
+    - "ElevenLabs speech timeline"
+    - "H3 unit plan"
+    - "Ref2VA prompts"
+    - "Wujie request evidence"
+    - "raw and accepted video paths"
+  exclusions:
+    - "generic replication without an explicit MiniMax H3 request"
+    - "automatic paid retries"
+    - "waveform-copy claims based only on prompt wording"
+  preserves:
+    - "source shot order and measured cuts"
+    - "approved audio masters"
+    - "raw provider outputs"

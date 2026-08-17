@@ -1,8 +1,8 @@
 {
   "name": "video-replication",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "owner": "qmio / viral-replica-loop",
-  "updated_at": "2026-07-23",
+  "updated_at": "2026-07-28",
   "review_cadence": "per-release",
   "status": "active",
   "maturity_tier": "governed",
@@ -59,6 +59,7 @@
     "Final Seedance prompts distinguish narration from in-frame synchronous speech and prevent product-reference packshot leakage by binding product refs to identity/material only.",
     "Execution blocks split at scene, visual-function, or spoken speaker-mode boundaries; short still-life B-roll is standalone.",
     "Prompt-only repair changes one declared failing time-and-Shot block; accepted blocks, assets, and Parts remain locked.",
+    "A broadly accepted master may invoke video-shot-refinement for one bounded visual interval while preserving the original audio and all accepted regions.",
     "Physical-change Shots state contact, visible motion, and resulting state instead of relying on an abstract action verb.",
     "Identity references do not transfer background or override Shot-specific skin state.",
     "Profile-specific commercial effect requirements are not weakened by generic realism clauses.",

@@ -81,8 +81,16 @@ class FinalVideoQcTests(unittest.TestCase):
             str(path),
         )
 
-    def run_qc(self, video, *extra_args, asr_text="孔凤春清洁泥膜"):
-        out_dir = self.root / f"qc-{len(list(self.root.glob('qc-*')))}"
+    def run_qc(
+        self,
+        video,
+        *extra_args,
+        asr_text="孔凤春清洁泥膜",
+        out_dir=None,
+    ):
+        out_dir = out_dir or (
+            self.root / f"qc-{len(list(self.root.glob('qc-*')))}"
+        )
         asr = self.root / "asr.md"
         asr.write_text(asr_text, encoding="utf-8")
         result = subprocess.run(
@@ -115,7 +123,7 @@ class FinalVideoQcTests(unittest.TestCase):
     def check(self, report, name):
         return next(item for item in report["checks"] if item["name"] == name)
 
-    def test_pass_reports_streams_duration_and_contact_sheet(self):
+    def test_pass_reports_streams_duration_and_builds_contact_sheet_in_one_scan(self):
         video = self.root / "normal.mp4"
         self.make_normal_video(video)
 
@@ -128,11 +136,36 @@ class FinalVideoQcTests(unittest.TestCase):
         self.assertEqual(self.check(report, "audio_stream_present")["status"], "PASS")
         self.assertEqual(self.check(report, "duration")["status"], "PASS")
         self.assertEqual(self.check(report, "contact_sheet")["status"], "PASS")
+        self.assertEqual(report["videos"][0]["technical_scan"]["passes"], 1)
         self.assertEqual(
             report["videos"][0]["sha256"],
             hashlib.sha256(video.read_bytes()).hexdigest(),
         )
         self.assertTrue((out_dir / "contact_sheet.jpg").exists())
+
+    def test_contact_sheet_flag_remains_compatible(self):
+        video = self.root / "normal.mp4"
+        self.make_normal_video(video)
+
+        report, out_dir = self.run_qc(video, "--contact-sheet")
+
+        self.assertEqual(report["overall"], "PASS")
+        self.assertTrue((out_dir / "contact_sheet.jpg").exists())
+
+    def test_existing_contact_sheet_is_rebuilt_for_the_current_video(self):
+        video = self.root / "normal.mp4"
+        self.make_normal_video(video)
+        out_dir = self.root / "same-qc"
+        self.run_qc(video, out_dir=out_dir)
+        sheet = out_dir / "contact_sheet.jpg"
+        original = sheet.read_bytes()
+        sheet.write_bytes(b"stale")
+
+        report, _ = self.run_qc(video, out_dir=out_dir)
+
+        self.assertEqual(report["overall"], "PASS")
+        self.assertNotEqual(sheet.read_bytes(), b"stale")
+        self.assertEqual(sheet.read_bytes(), original)
 
     def test_missing_file_stops(self):
         report, _ = self.run_qc(self.root / "missing.mp4")

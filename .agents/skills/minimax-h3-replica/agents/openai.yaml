@@ -1,0 +1,4 @@
+interface:
+  display_name: "MiniMax H3 Replica"
+  short_description: "用 MiniMax H3 直接复刻参考视频并完成交付"
+  default_prompt: "Use $minimax-h3-replica to replicate this source video with MiniMax H3 using my person, product, and audio assets."

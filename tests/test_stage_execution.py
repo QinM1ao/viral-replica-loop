@@ -20,6 +20,51 @@ class StageExecutionTest(unittest.TestCase):
         path = Path(value)
         return path if path.is_absolute() else root / path
 
+    def test_combine_plans_creates_one_ready_overlap_wave(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            plans = []
+            for packet_id, output in (
+                ("source-detail", "output/job-001/source-detail"),
+                ("image-part1", "output/job-001/image-part1"),
+            ):
+                plans.append(
+                    stage_execution.seal_plan(
+                        root,
+                        {
+                            "schema_version": 1,
+                            "job_id": "job-001",
+                            "stage": packet_id,
+                            "coordinator_only_paths": [
+                                "output/job-001/storyboard_source_refs"
+                            ],
+                            "packets": [
+                                {
+                                    "packet_id": packet_id,
+                                    "command": ["/usr/bin/true"],
+                                    "depends_on": [],
+                                    "allowed_write_roots": [output],
+                                    "completion_path": f"{output}/completion.json",
+                                }
+                            ],
+                        },
+                    )
+                )
+
+            combined = stage_execution.combine_plans(
+                root, plans, stage="source_image_overlap"
+            )
+
+            self.assertTrue(combined["plan_sha256"])
+            self.assertEqual(
+                stage_execution.ready_packet_ids(combined, completed=set()),
+                ["source-detail", "image-part1"],
+            )
+            self.assertEqual(
+                combined["coordinator_only_paths"],
+                ["output/job-001/storyboard_source_refs"],
+            )
+
     def test_execute_rejects_an_unsealed_plan(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -47,6 +92,47 @@ class StageExecutionTest(unittest.TestCase):
                 "sealed plan",
             ):
                 stage_execution.execute_plan(root, plan)
+
+    def test_failed_packet_may_leave_an_empty_staging_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_root = root / "output/job-001/work/story"
+            plan = stage_execution.seal_plan(
+                root,
+                {
+                    "schema_version": 1,
+                    "job_id": "job-001",
+                    "stage": "source_blueprint",
+                    "packets": [
+                        {
+                            "packet_id": "story",
+                            "executor_kind": "agent",
+                            "task": "Prepare story evidence.",
+                            "depends_on": [],
+                            "allowed_write_roots": [str(write_root)],
+                            "completion_path": str(
+                                root / "output/job-001/work/completions/story.json"
+                            ),
+                        }
+                    ],
+                },
+            )
+
+            def dispatcher(packet):
+                staged_root = Path(packet["allowed_write_roots"][0])
+                (staged_root / "asr").mkdir(parents=True)
+                return {
+                    "status": "FAIL",
+                    "outputs": [],
+                    "error": "ASR provider unavailable",
+                }
+
+            report = stage_execution.execute_plan(root, plan, dispatcher=dispatcher)
+
+            self.assertEqual(report["overall"], "FAIL")
+            error = report["completions"][0]["error"]
+            self.assertIn("ASR provider unavailable", error)
+            self.assertNotIn("violated declared write set", error)
 
     def test_rejects_job_id_path_traversal(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -450,6 +536,77 @@ class StageExecutionTest(unittest.TestCase):
             self.assertEqual(report["completions"][0]["outputs"][0]["path"], (
                 "output/job-001/work/check/result.json"
             ))
+
+    def test_default_dispatcher_promotes_successful_declared_files_without_expected_outputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            candidate = "output/job-001/image-batch/candidates/part1.png"
+            contract = "output/job-001/image-batch/contracts/part1.json"
+            invocation = "output/job-001/image-batch/invocations/part1.json"
+            plan = stage_execution.seal_plan(
+                root,
+                {
+                    "schema_version": 1,
+                    "job_id": "job-001",
+                    "stage": "image_batch_qc",
+                    "packets": [
+                        {
+                            "packet_id": "part1",
+                            "command": [
+                                "python3",
+                                "generate.py",
+                                "--file",
+                                candidate,
+                                "--contract",
+                                contract,
+                                "--invocation-manifest",
+                                invocation,
+                            ],
+                            "depends_on": [],
+                            "allowed_write_roots": [
+                                candidate,
+                                contract,
+                                invocation,
+                            ],
+                            "completion_path": (
+                                "output/job-001/work/completions/part1.json"
+                            ),
+                        }
+                    ],
+                },
+            )
+
+            def runner(command, **_kwargs):
+                for flag in (
+                    "--file",
+                    "--contract",
+                    "--invocation-manifest",
+                ):
+                    output = self.runtime_path(
+                        root,
+                        command[command.index(flag) + 1],
+                    )
+                    output.parent.mkdir(parents=True, exist_ok=True)
+                    output.write_text("generated\n", encoding="utf-8")
+                return subprocess.CompletedProcess(
+                    command,
+                    0,
+                    stdout="ok",
+                    stderr="",
+                )
+
+            report = stage_execution.execute_plan(
+                root,
+                plan,
+                runner=runner,
+            )
+
+            self.assertEqual(report["overall"], "PASS")
+            for path in (candidate, contract, invocation):
+                self.assertEqual(
+                    (root / path).read_text(encoding="utf-8"),
+                    "generated\n",
+                )
 
     def test_wave_blocks_current_job_side_write_before_mutation(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1969,6 +2126,206 @@ class StageExecutionTest(unittest.TestCase):
 
             self.assertEqual(report["overall"], "PASS")
             self.assertEqual(output.read_text(encoding="utf-8"), "PASS\n")
+
+    def test_external_sandbox_still_enforces_packet_write_set(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            allowed = root / "output/job-001/generation/part1"
+            output = allowed / "result.txt"
+            rogue = root / "undeclared-sibling.txt"
+            command = [
+                "python3",
+                "-c",
+                (
+                    "import pathlib,sys;"
+                    "out=pathlib.Path(sys.argv[1]);"
+                    "out.parent.mkdir(parents=True,exist_ok=True);"
+                    "out.write_text('PASS\\n');"
+                    "pathlib.Path(sys.argv[2]).write_text('rogue\\n')"
+                ),
+                str(output),
+                str(rogue),
+            ]
+            plan = stage_execution.seal_plan(
+                root,
+                {
+                    "schema_version": 1,
+                    "job_id": "job-001",
+                    "stage": "generation",
+                    "packets": [
+                        {
+                            "packet_id": "part1",
+                            "command": command,
+                            "depends_on": [],
+                            "allowed_write_roots": [str(allowed)],
+                            "completion_path": str(allowed / "completion.json"),
+                            "expected_outputs": [str(output)],
+                        }
+                    ],
+                },
+            )
+            original_active = stage_execution._external_sandbox_execution_active
+            original_root = getattr(
+                stage_execution,
+                "_external_sandbox_workspace_root",
+                None,
+            )
+            stage_execution._external_sandbox_execution_active = lambda: True
+            stage_execution._external_sandbox_workspace_root = lambda: root
+            try:
+                report = stage_execution.execute_plan(root, plan)
+            finally:
+                stage_execution._external_sandbox_execution_active = (
+                    original_active
+                )
+                if original_root is None:
+                    del stage_execution._external_sandbox_workspace_root
+                else:
+                    stage_execution._external_sandbox_workspace_root = (
+                        original_root
+                    )
+
+            self.assertEqual(report["overall"], "FAIL")
+            self.assertIn(
+                "undeclared-sibling.txt",
+                report["completions"][0]["error"],
+            )
+            self.assertFalse(rogue.exists())
+
+    def test_external_sandbox_audits_workspace_siblings_and_caches(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            root = workspace / "actual-intake"
+            root.mkdir()
+            allowed = root / "output/job-001/generation/part1"
+            output = allowed / "result.txt"
+            sibling = workspace / "undeclared-sibling.txt"
+            cache_file = workspace / ".cache" / "rogue.txt"
+            existing = workspace / "existing-sibling.txt"
+            existing.write_text("original\n", encoding="utf-8")
+            command = [
+                "python3",
+                "-c",
+                (
+                    "import pathlib,sys;"
+                    "out=pathlib.Path(sys.argv[1]);"
+                    "out.parent.mkdir(parents=True,exist_ok=True);"
+                    "out.write_text('PASS\\n');"
+                    "sibling=pathlib.Path(sys.argv[2]);"
+                    "sibling.write_text('rogue\\n');"
+                    "cache=pathlib.Path(sys.argv[3]);"
+                    "cache.parent.mkdir(parents=True,exist_ok=True);"
+                    "cache.write_text('rogue\\n');"
+                    "pathlib.Path(sys.argv[4]).write_text('mutated\\n')"
+                ),
+                str(output),
+                str(sibling),
+                str(cache_file),
+                str(existing),
+            ]
+            plan = stage_execution.seal_plan(
+                root,
+                {
+                    "schema_version": 1,
+                    "job_id": "job-001",
+                    "stage": "generation",
+                    "packets": [
+                        {
+                            "packet_id": "part1",
+                            "command": command,
+                            "depends_on": [],
+                            "allowed_write_roots": [str(allowed)],
+                            "completion_path": str(
+                                allowed / "completion.json"
+                            ),
+                            "expected_outputs": [str(output)],
+                        }
+                    ],
+                },
+            )
+            original_active = (
+                stage_execution._external_sandbox_execution_active
+            )
+            original_root = (
+                stage_execution._external_sandbox_workspace_root
+            )
+            stage_execution._external_sandbox_execution_active = (
+                lambda: True
+            )
+            stage_execution._external_sandbox_workspace_root = (
+                lambda: workspace
+            )
+            try:
+                report = stage_execution.execute_plan(root, plan)
+            finally:
+                stage_execution._external_sandbox_execution_active = (
+                    original_active
+                )
+                stage_execution._external_sandbox_workspace_root = (
+                    original_root
+                )
+
+            self.assertEqual(report["overall"], "FAIL")
+            self.assertIn(
+                "undeclared-sibling.txt",
+                report["completions"][0]["error"],
+            )
+            self.assertIn(
+                ".cache/rogue.txt",
+                report["completions"][0]["error"],
+            )
+            self.assertFalse(sibling.exists())
+            self.assertFalse(cache_file.exists())
+            self.assertEqual(
+                existing.read_text(encoding="utf-8"),
+                "original\n",
+            )
+
+    def test_external_audit_keeps_large_backups_out_of_packet_filesystem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            existing = workspace / "existing-sibling.bin"
+            original = b"trusted-before\n" + (b"x" * (2 * 1024 * 1024))
+            existing.write_bytes(original)
+            audit_roots_before = {
+                path
+                for path in workspace.parent.iterdir()
+                if path.name.startswith(".stage-execution-audit-")
+            }
+
+            snapshot = stage_execution._capture_output_tree(
+                workspace,
+                (),
+                backup=True,
+                include_runtime_caches=True,
+                force_memory_backup=True,
+            )
+            try:
+                self.assertIsNone(snapshot["backup_root"])
+                self.assertEqual(
+                    snapshot["entries"][existing.resolve()]["backup"],
+                    original,
+                )
+                self.assertEqual(
+                    {
+                        path
+                        for path in workspace.parent.iterdir()
+                        if path.name.startswith(".stage-execution-audit-")
+                    },
+                    audit_roots_before,
+                )
+
+                existing.write_bytes(b"packet-controlled\n")
+                violations = stage_execution._audit_output_write_set(
+                    workspace,
+                    snapshot,
+                    (),
+                )
+                self.assertTrue(violations)
+                self.assertTrue(all(item[2] for item in violations))
+                self.assertEqual(existing.read_bytes(), original)
+            finally:
+                stage_execution._cleanup_snapshot(snapshot)
 
 
 if __name__ == "__main__":

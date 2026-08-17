@@ -131,7 +131,7 @@ python3 tools/qc_risk_ledger.py \
   --stage subtitle_removal
 ```
 
-Every branch emits `subtitle_presence_classification`, because deciding whether visible pixels contain captions is semantic even when the maker wrote `clean`. A `mediakit_pro` branch also emits `subtitle_repair_quality`. Batch all emitted families into one independent checker invocation, bind the real semantic request path/hash with `tools/checker_review_qc.py`, rebuild the ledger, and require `PASS` before recording the gate.
+Every branch emits `subtitle_presence_classification`, because deciding whether visible pixels contain captions is semantic even when the maker wrote `clean`. While inspecting the same full-timeline frames, that one checker must also reject an obvious wrong person, wrong product, broken material, or visible seam break. Do not create a second final-video semantic review for those hard blockers. A `mediakit_pro` branch also emits `subtitle_repair_quality`. Batch all emitted families into one independent checker invocation, bind the real semantic request path/hash with `tools/checker_review_qc.py`, rebuild the ledger, and require `PASS` before recording the gate.
 
 Record a paid PASS with:
 

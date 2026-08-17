@@ -10,7 +10,10 @@ from urllib.parse import urlparse
 
 
 URL_RE = re.compile(r"https?://[^\s\"'<>，。)）]+")
-LOCAL_PATH_RE = re.compile(r"(^/Users/|^/var/|^/tmp/|^[A-Za-z]:\\|\\.png$|\\.jpg$|\\.jpeg$|\\.mp4$|\\.wav$|\\.mp3$)")
+LOCAL_PATH_RE = re.compile(
+    r"(^/(?:Users|var|tmp)/|^[A-Za-z]:\\|\\.png$|\\.jpg$|\\.jpeg$|"
+    r"\\.mp4$|\\.wav$|\\.mp3$)"
+)
 
 
 def is_model_field(path):

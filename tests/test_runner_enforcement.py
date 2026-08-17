@@ -31,6 +31,9 @@ class RunnerEnforcementTest(unittest.TestCase):
         worker = (REPO_ROOT / "workers/final_qc_worker.md").read_text(
             encoding="utf-8"
         )
+        gate = (REPO_ROOT / "gates/final_video_gate.md").read_text(
+            encoding="utf-8"
+        )
         skill = (
             REPO_ROOT / ".agents/skills/video-replication/SKILL.md"
         ).read_text(encoding="utf-8")
@@ -40,6 +43,12 @@ class RunnerEnforcementTest(unittest.TestCase):
             worker,
         )
         self.assertNotIn("output/<job-id>/final_qc", worker)
+        self.assertIn("--record-gate-result PASS", worker)
+        self.assertIn("--apply-transition", worker)
+        self.assertNotIn("Spot-check:", worker)
+        self.assertIn("--target-duration <job-target-duration-seconds>", worker)
+        self.assertNotIn("--target-duration 30", worker)
+        self.assertIn("不需要独立 checker", gate)
         self.assertIn('--out-dir "<输出目录>/final"', skill)
         self.assertNotIn('--out-dir "<输出目录>/final_qc"', skill)
 
@@ -536,6 +545,32 @@ class RunnerEnforcementTest(unittest.TestCase):
         self.assertIn("Decision: **continue**", result.stdout)
         self.assertNotIn("missing required inputs", result.stdout.lower())
 
+    def test_source_blueprint_contract_is_one_continuous_non_generation_run(self):
+        worker = (REPO_ROOT / "workers/source_blueprint_worker.md").read_text(
+            encoding="utf-8"
+        )
+        gate = (REPO_ROOT / "gates/source_blueprint_gate.md").read_text(
+            encoding="utf-8"
+        )
+        rules = json.loads(
+            (REPO_ROOT / "rules/STAGE_RULES.json").read_text(encoding="utf-8")
+        )
+        rule = next(
+            item for item in rules["rules"] if item["id"] == "pending_source_blueprint"
+        )
+
+        self.assertEqual(rule["canonical_stage"], "source_blueprint")
+        self.assertEqual(rule["next_expected"], "storyboard_passed")
+        self.assertIn("internal checkpoint", rule["action"])
+        self.assertIn("one all-beat visual review", rule["action"])
+        self.assertIn("only failed beats", rule["action"])
+        self.assertNotIn("source_image_overlap", rule["action"])
+        self.assertIn("not the Stage Run completion", worker)
+        self.assertIn("Never restart preparation", worker)
+        self.assertIn("no image work may overlap this stage", worker)
+        self.assertIn("preparation report alone is never completion", gate)
+        self.assertIn("No image-generation or video-generation work", gate)
+
     def test_source_blueprint_pass_requires_passing_source_rhythm_qc(self):
         self.write_job(
             "pending",
@@ -689,7 +724,7 @@ class RunnerEnforcementTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("endpoint does not match", result.stderr)
 
-    def test_source_blueprint_pass_accepts_both_rhythm_qc_layers(self):
+    def test_source_blueprint_pass_also_requires_qc_risk_ledger_checker(self):
         self.write_job(
             "pending",
             "storyboard_passed",
@@ -750,7 +785,8 @@ class RunnerEnforcementTest(unittest.TestCase):
             check=False,
         )
 
-        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("QC Risk Ledger did not pass", result.stderr)
 
     def test_explicit_stop_point_still_stops_self_audit(self):
         result = self.run_loop("--self-audit", "--stop-at", "image_sample_review", "--dry-run")
@@ -1079,6 +1115,21 @@ class RunnerEnforcementTest(unittest.TestCase):
         job = self.read_job()
         self.assertEqual(job["status"], "done")
         self.assertEqual(job["needs_user_confirmation"], "false")
+        delivery = json.loads(
+            (
+                self.root
+                / "output/job-001/final/delivery_manifest.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(delivery["overall"], "PASS")
+        self.assertEqual(
+            delivery["delivery_path"],
+            str(
+                (
+                    self.root / "output/job-001/final/final_video.mp4"
+                ).resolve()
+            ),
+        )
 
         done = self.run_loop("--dry-run")
         self.assertIn("User-facing delivery: `Final Video`", done.stdout)

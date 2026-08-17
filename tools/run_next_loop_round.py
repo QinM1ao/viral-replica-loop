@@ -9,12 +9,23 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from lifecycle_registry import LifecycleRegistry
 from evidence_ledger import select_job_id
 from finish_video import PlanError as FinishingPlanError
 from finish_video import probe as probe_finished_media
 from finish_video import validate_plan as validate_finishing_plan
+from delivery_outcome import build_delivery_manifest
 from hash_gated_visual_qc import record_snapshot
-from qc_risk_ledger import build_stage_ledger, ledger_failure_message
+from qc_risk_ledger import (
+    build_stage_ledger,
+    ledger_failure_message,
+    subtitle_removal_pass_binding,
+)
+from checker_review_qc import (
+    bind_risk_request,
+    review_report,
+    write_bound_report_json,
+)
 from qc_outcomes import (
     OUTCOME_COST_GATE,
     OUTCOME_EVIDENCE_STOP,
@@ -35,6 +46,10 @@ from caption_finishing_qc import (
     request_path_for as caption_request_path_for,
 )
 from subtitle_workflow_qc import removal_issues
+from canonical_execution_context import (
+    CanonicalExecutionContext,
+    ExecutionContextError,
+)
 
 
 DEFAULT_RETRY_LIMIT = 2
@@ -67,7 +82,12 @@ VISUAL_QC_STAGES = {
     "request_qc",
     "pre_seedance_pack",
 }
-QC_RISK_LEDGER_STAGES = VISUAL_QC_STAGES | {"finishing", "subtitle_removal", "final_qc"}
+QC_RISK_LEDGER_STAGES = VISUAL_QC_STAGES | {
+    "source_blueprint",
+    "finishing",
+    "subtitle_removal",
+    "final_qc",
+}
 PRE_SEEDANCE_HANDOFF = "Pre-Seedance Handoff"
 FINAL_VIDEO_DELIVERY = "Final Video"
 NO_USER_DELIVERY = "none (internal runner decision)"
@@ -78,68 +98,12 @@ VISUAL_QC_GATES = {
     "request_gate.md",
     "pre_seedance_pack_gate.md",
 }
-USER_VISIBLE_STAGES = (
-    {
-        "index": 1,
-        "label": "看懂原片",
-        "summary": "拆清楚原视频剧情、口播、镜头节奏和污染风险。",
-        "canonical": {"asset_gate", "source_blueprint", "story_analysis", "storyboard"},
-        "statuses": {"pending", "story_analyzed"},
-        "next_stages": {"source_blueprint", "story_analysis", "storyboard"},
-    },
-    {
-        "index": 2,
-        "label": "改好分镜",
-        "summary": "一次性改完所有 Part 分镜，替换人物和产品，并去掉旧字幕/旧画面污染。",
-        "canonical": {"image_sample", "image_sample_review", "image_batch_qc", "afterwash_reference_review"},
-        "statuses": {
-            "storyboard_passed",
-            "sample_image_waiting_review",
-            "image_sample_approved",
-            "afterwash_ref_waiting_review",
-            "afterwash_ref_passed",
-        },
-        "next_stages": {
-            "image_sample",
-            "image_sample_review",
-            "image_batch_qc",
-            "sample_image_waiting_review",
-            "afterwash_reference_review",
-        },
-    },
-    {
-        "index": 3,
-        "label": "写视频脚本",
-        "summary": "写口播、缝点、Seedance 提示词和请求素材，并完成音频边界检查。",
-        "canonical": {"voiceover", "seam", "seedance_prompt", "audio_boundary_qc", "request_qc", "pre_seedance_pack"},
-        "statuses": {
-            "image_qc_passed",
-            "part2_storyboard_loop_passed",
-            "voiceover_done",
-            "seam_done",
-            "seedance_prompt_done",
-            "audio_boundary_qc_done",
-        },
-        "next_stages": {"voiceover", "seam", "seedance_prompt", "audio_boundary_qc", "request_qc", "pre_seedance_pack"},
-    },
-    {
-        "index": 4,
-        "label": "生成视频",
-        "summary": "确认付费范围，提交或等待 Seedance，并下载各 Part 视频。",
-        "canonical": {"cost_gate", "generation_approval", "generation"},
-        "statuses": {"seedance_inputs_prepared", "generation_approved"},
-        "status_prefixes": {"seedance_inputs_prepared", "seedance_generating"},
-        "next_stages": {"generation_approval", "generation"},
-    },
-    {
-        "index": 5,
-        "label": "质检交付",
-        "summary": "按明确剪辑计划收尾成片，跑技术 QC，交付最终视频或明确失败原因。",
-        "canonical": {"finishing", "subtitle_removal", "final_qc", "caption_finishing", "terminal"},
-        "statuses": {"finishing", "subtitle_removal", "final_qc", "caption_finishing", "done", "blocked"},
-        "status_prefixes": {"finishing", "subtitle_removal", "final_qc", "caption_finishing"},
-        "next_stages": {"finishing", "subtitle_removal", "final_qc", "caption_finishing", "done", "blocked"},
-    },
+DEFAULT_LIFECYCLE_REGISTRY = LifecycleRegistry.load(
+    Path(__file__).resolve().parents[1]
+)
+USER_VISIBLE_STAGES = tuple(
+    stage.as_dict()
+    for stage in DEFAULT_LIFECYCLE_REGISTRY.progress_stages
 )
 DEFAULT_USER_VISIBLE_STAGE = USER_VISIBLE_STAGES[0]
 
@@ -152,23 +116,18 @@ def parse_bool(value):
     return str(value).strip().lower() in {"1", "true", "yes", "y"}
 
 
-def user_visible_stage(canonical_stage="", status="", next_stage=""):
-    canonical_stage = str(canonical_stage or "").strip()
-    status = str(status or "").strip()
-    next_stage = str(next_stage or "").strip()
-
-    if canonical_stage in {"confirmation_gate", "retry_limit_gate", "self_audit_review", "unknown"}:
-        canonical_stage = ""
-
-    for stage in USER_VISIBLE_STAGES:
-        if (
-            canonical_stage in stage["canonical"]
-            or status in stage["statuses"]
-            or any(status.startswith(prefix) for prefix in stage.get("status_prefixes", ()))
-            or next_stage in stage["next_stages"]
-        ):
-            return stage
-    return DEFAULT_USER_VISIBLE_STAGE
+def user_visible_stage(
+    canonical_stage="",
+    status="",
+    next_stage="",
+    lifecycle=None,
+):
+    registry = lifecycle or DEFAULT_LIFECYCLE_REGISTRY
+    return registry.progress(
+        canonical=canonical_stage,
+        status=status,
+        next_stage=next_stage,
+    ).as_dict()
 
 
 def user_visible_stage_text(stage):
@@ -186,18 +145,8 @@ def normalize_stop_at(values):
 
 
 def load_stage_rules(root):
-    candidates = [
-        root / "rules" / "STAGE_RULES.json",
-        root / "stages" / "STAGE_RULES.json",
-    ]
-    path = next((candidate for candidate in candidates if candidate.exists()), candidates[0])
-    with path.open(encoding="utf-8") as f:
-        config = json.load(f)
-
-    if not isinstance(config.get("rules"), list):
-        raise ValueError(f"{path} must contain a `rules` list")
-
-    return config, path
+    registry = LifecycleRegistry.load(root)
+    return registry.config, registry.path
 
 
 def default_cost_policy():
@@ -264,7 +213,7 @@ def load_cost_policy(root):
 
 
 def terminal_statuses(stage_config):
-    return set(stage_config.get("terminal_statuses", ["done", "blocked"]))
+    return set(LifecycleRegistry.from_config(stage_config).terminal_statuses())
 
 
 def default_runner_state():
@@ -396,6 +345,34 @@ def finish_stage_attempt(job_state, stage, timestamp):
         "finished_at": timestamp,
         "duration_seconds": duration_seconds,
     }
+
+
+def generation_provider_wait_seconds(root, job_id):
+    fanout = Path(root) / "output" / job_id / "generation" / "fanout"
+    candidates = [
+        fanout / "run_report.json",
+        fanout / "attempt_2" / "run_report.json",
+    ]
+    reports = []
+    for path in candidates:
+        if not path.is_file():
+            continue
+        try:
+            report = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if (
+            report.get("job_id") == job_id
+            and report.get("stage") == "generation"
+        ):
+            reports.append((path.stat().st_mtime_ns, report))
+    if not reports:
+        return 0.0
+    report = max(reports, key=lambda item: item[0])[1]
+    try:
+        return max(0.0, float(report.get("provider_wait_seconds") or 0.0))
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def append_event_log(root, event):
@@ -530,25 +507,11 @@ def contains_any(value, markers):
 
 
 def rule_matches(rule, status):
-    match = rule.get("match", {})
-    match_type = match.get("type", "exact")
-    target = match.get("status", "")
-
-    if match_type == "exact":
-        return status == target
-    if match_type == "prefix":
-        return status.startswith(target)
-    if match_type == "contains":
-        return target in status
-
-    raise ValueError(f"Unknown match type `{match_type}` in rule `{rule.get('id', '')}`")
+    return LifecycleRegistry.rule_matches(rule, status)
 
 
 def find_rule(stage_config, status):
-    for rule in stage_config.get("rules", []):
-        if rule_matches(rule, status):
-            return rule
-    return None
+    return LifecycleRegistry.from_config(stage_config).resolve(status)
 
 
 def stop_at_matches(rule, status, next_stage, stop_at):
@@ -1218,16 +1181,6 @@ def finishing_evidence_issues(root, job):
         issues.append("finishing report expected_duration does not match the edit plan")
     if abs(reported_actual - output_media["duration"]) > tolerance:
         issues.append("finishing report actual_duration does not match the final video")
-    if not shutil.which("ffmpeg"):
-        issues.append("ffmpeg is missing for finishing decode verification")
-    else:
-        decoded = subprocess.run(
-            ["ffmpeg", "-v", "error", "-i", str(output_path), "-f", "null", "-"],
-            text=True,
-            capture_output=True,
-        )
-        if decoded.returncode != 0:
-            issues.append(f"finishing output decode failed: {decoded.stderr.strip()}")
     if report.get("overall") != "PASS":
         issues.append("finishing report overall is not PASS")
     if report.get("executor") != "local_ffmpeg":
@@ -1318,12 +1271,12 @@ def final_qc_active_output_issues(root, job, artifact=""):
             configured = True
     if not configured and not removal_path.is_file():
         return []
-    issues = removal_issues(removal_path)
-    if issues:
-        return [f"subtitle removal evidence: {issue}" for issue in issues]
-    removal = json.loads(removal_path.read_text(encoding="utf-8"))
-    active_path = Path(str(removal.get("output_video") or "")).resolve()
-    active_hash = str(removal.get("output_sha256") or "")
+    binding, issues = subtitle_removal_pass_binding(
+        root,
+        job.get("id", ""),
+    )
+    active_path = binding.get("output_path")
+    active_hash = binding.get("output_sha256")
 
     artifact_path = resolve_path(root, artifact) if artifact else None
     candidates = []
@@ -1389,7 +1342,22 @@ def apply_optional_caption_transition(root, job, decision):
     return redirected
 
 
+def advisory_semantic_failures_only(ledger):
+    blocking = [
+        family
+        for family in (ledger.get("families") or {}).values()
+        if str(family.get("status") or "").upper()
+        not in {"PASS", "REUSED_PASS", "VISUAL_WARNING"}
+    ]
+    return bool(blocking) and all(
+        str(family.get("kind") or "").lower() == "semantic"
+        and str(family.get("status") or "").upper() == "FAIL"
+        for family in blocking
+    )
+
+
 def preflight_pass_recording(root, job, decision, args):
+    args._acceptance_metrics = {}
     if args.record_gate_result.upper() != "PASS":
         return
 
@@ -1502,12 +1470,109 @@ def preflight_pass_recording(root, job, decision, args):
         artifact=artifact,
         write=not getattr(args, "dry_run", False),
     )
-    if ledger.get("overall") != "PASS":
+    review_request = ledger.get("semantic_review_request") or {}
+    if review_request.get("required") and not getattr(args, "dry_run", False):
+        stage = decision.get("canonical_stage", "")
+        request_path = (
+            root
+            / "output"
+            / job.get("id", "")
+            / "checks"
+            / f"{stage}_semantic_review_request.json"
+        )
+        artifact_path = resolve_path(root, artifact) if artifact else None
+        default_review = (
+            root
+            / "output"
+            / job.get("id", "")
+            / "checks"
+            / f"{stage}_gate_review.md"
+        )
+        review_path = (
+            artifact_path
+            if (
+                artifact_path is not None
+                and artifact_path.suffix.lower() == ".md"
+                and "gate_review" in artifact_path.stem
+            )
+            else default_review
+        )
+        if review_path.is_file() and request_path.is_file():
+            gate_path = resolve_path(root, decision.get("gate", ""))
+            checker_report = review_report(review_path, gate_path)
+            checker_report = bind_risk_request(
+                checker_report,
+                request_path,
+                root,
+                require_declared_request=True,
+            )
+            checker_json = review_path.with_name(
+                review_path.stem + "_qc.json"
+            )
+            write_bound_report_json(checker_report, checker_json, root)
+            ledger = build_stage_ledger(
+                root,
+                job,
+                stage,
+                artifact=str(review_path),
+                write=True,
+            )
+    advisory_override = bool(
+        getattr(args, "advisory_usable_artifact", False)
+        and advisory_semantic_failures_only(ledger)
+    )
+    if ledger.get("overall") != "PASS" and not advisory_override:
         raise ValueError(
             "refusing to record PASS: QC Risk Ledger did not pass. "
             + ledger_failure_message(ledger)
             + f" Ledger: {ledger.get('ledger_path', '')}"
         )
+    metrics = ledger.get("metrics") or {}
+    family_traces = [
+        family.get("decision_trace") or {}
+        for family in (ledger.get("families") or {}).values()
+    ]
+    args._acceptance_metrics = {
+        "active_seconds": float(
+            metrics.get("active_seconds")
+            if metrics.get("active_seconds") is not None
+            else sum(
+                float(trace.get("active_seconds") or 0.0)
+                for trace in family_traces
+            )
+        ),
+        "checker_wait_seconds": float(
+            metrics.get("wait_seconds")
+            if metrics.get("wait_seconds") is not None
+            else max(
+                (
+                    float(trace.get("wait_seconds") or 0.0)
+                    for trace in family_traces
+                ),
+                default=0.0,
+            )
+        ),
+    }
+    if decision.get("canonical_stage") in {
+        "finishing",
+        "subtitle_removal",
+        "final_qc",
+    }:
+        delivery = build_delivery_manifest(
+            root,
+            job.get("id", ""),
+            write=not getattr(args, "dry_run", False),
+            verify_files=True,
+        )
+        args._delivery_manifest = delivery
+        if (
+            decision.get("canonical_stage") == "final_qc"
+            and delivery.get("overall") != "PASS"
+        ):
+            raise ValueError(
+                "refusing to record final_qc PASS: Delivery Outcome did not "
+                f"bind one passing final path ({delivery.get('next_action')})"
+            )
 
 
 def preflight_cost_policy_recording(root, job, decision, args, cost_policy, job_state):
@@ -1708,6 +1773,30 @@ def record_gate_result(state, job, decision, args, root, cost_policy):
         approval["submitted_task_count"] = int(approval.get("submitted_task_count", 0) or 0) + args.spent_seedance_runs
 
     timing = finish_stage_attempt(job_state, decision.get("canonical_stage", ""), timestamp)
+    acceptance_metrics = getattr(args, "_acceptance_metrics", {}) or {}
+    wall_seconds = float(timing.get("duration_seconds") or 0.0)
+    checker_wait_seconds = min(
+        wall_seconds,
+        max(
+            0.0,
+            float(acceptance_metrics.get("checker_wait_seconds") or 0.0),
+        ),
+    )
+    remaining_seconds = max(
+        0.0,
+        wall_seconds - checker_wait_seconds,
+    )
+    provider_wait_seconds = 0.0
+    if decision.get("canonical_stage") == "generation":
+        provider_wait_seconds = min(
+            remaining_seconds,
+            generation_provider_wait_seconds(root, job.get("id", "")),
+        )
+    remaining_seconds -= provider_wait_seconds
+    user_wait_seconds = remaining_seconds if is_approval_record else 0.0
+    remaining_seconds -= user_wait_seconds
+    active_seconds = remaining_seconds
+    remaining_seconds = 0.0
     event = {
         "time": timestamp,
         "job": job.get("id", ""),
@@ -1730,6 +1819,11 @@ def record_gate_result(state, job, decision, args, root, cost_policy):
         "mediakit_subtitle_removal_runs": spent.get(
             "mediakit_subtitle_removal_runs", 0
         ),
+        "active_seconds": active_seconds,
+        "provider_wait_seconds": provider_wait_seconds,
+        "checker_wait_seconds": checker_wait_seconds,
+        "user_wait_seconds": user_wait_seconds,
+        "unclassified_wait_seconds": remaining_seconds,
         **timing,
     }
     history = job_state.setdefault("gate_history", [])
@@ -1919,9 +2013,19 @@ def apply_transition_to_jobs(jobs, transition):
         raise ValueError(f"job `{transition['job']}` not found in jobs.csv")
 
 
-def transition_markdown(transition, applied):
-    from_stage = user_visible_stage("", transition.get("from_status"), transition.get("from_next_stage"))
-    to_stage = user_visible_stage("", transition.get("to_status"), transition.get("to_next_stage"))
+def transition_markdown(transition, applied, lifecycle=None):
+    from_stage = user_visible_stage(
+        "",
+        transition.get("from_status"),
+        transition.get("from_next_stage"),
+        lifecycle,
+    )
+    to_stage = user_visible_stage(
+        "",
+        transition.get("to_status"),
+        transition.get("to_next_stage"),
+        lifecycle,
+    )
     lines = [
         "# 状态更新",
         "",
@@ -2042,21 +2146,27 @@ def decide(
     self_audit=False,
     stop_at=None,
     recording_zero_spend_pass=False,
+    contract_root=None,
 ):
+    contract_root = Path(contract_root or root).resolve()
     status = job.get("status", "").strip()
     next_stage = job.get("next_stage", "").strip()
     needs_confirmation = parse_bool(job.get("needs_user_confirmation", ""))
-    terminal = terminal_statuses(stage_config)
-    paid_markers = tuple(stage_config.get("paid_stage_markers", []))
+    lifecycle = LifecycleRegistry.from_config(stage_config)
+    terminal = set(lifecycle.terminal_statuses())
+    paid_markers = lifecycle.paid_stage_markers()
     retry_limit = int(runner_state.get("retry_limit", DEFAULT_RETRY_LIMIT) or DEFAULT_RETRY_LIMIT)
     state_job = ensure_job_state(runner_state, job)
     approval_context = approval_context or {}
     checks = []
 
-    for required in ("STATE.md", "QC_RULES.md", "jobs.csv", "LOOP.md", "RUNNER_STATE.json", "rules/STAGE_RULES.json"):
+    for required in ("STATE.md", "jobs.csv", "RUNNER_STATE.json"):
         path = root / required
         checks.append((required, path.exists(), str(path)))
-    add_cost_checks(root, checks, cost_policy)
+    for required in ("QC_RULES.md", "LOOP.md", "rules/STAGE_RULES.json"):
+        path = contract_root / required
+        checks.append((required, path.exists(), str(path)))
+    add_cost_checks(contract_root, checks, cost_policy)
 
     asset_checks, missing_assets = required_asset_checks(root, job)
     checks.extend(asset_checks)
@@ -2075,9 +2185,9 @@ def decide(
         script_file = rule.get("script_file", "none") if rule else "none"
         cost_class = rule.get("cost_class", "free_check") if rule else "free_check"
         cost_state = cost_state_for(state_job, cost_policy, cost_class)
-        add_gate_check(root, checks, gate)
-        add_worker_check(root, checks, worker_file)
-        add_script_check(root, checks, script_file)
+        add_gate_check(contract_root, checks, gate)
+        add_worker_check(contract_root, checks, worker_file)
+        add_script_check(contract_root, checks, script_file)
         return {
             "decision": "stop",
             "reason": rule.get("reason", f"selected job is terminal: {status}") if rule else f"selected job is terminal: {status}",
@@ -2133,9 +2243,9 @@ def decide(
         script_file = rule.get("script_file", "none")
         cost_class = rule.get("cost_class", "expensive_generation")
         cost_state = cost_state_for(state_job, cost_policy, cost_class, approval_context)
-        add_gate_check(root, checks, gate)
-        add_worker_check(root, checks, worker_file)
-        add_script_check(root, checks, script_file)
+        add_gate_check(contract_root, checks, gate)
+        add_worker_check(contract_root, checks, worker_file)
+        add_script_check(contract_root, checks, script_file)
         return {
             "decision": "continue",
             "reason": "generation approval is recorded for the approved scope; run the cost approval gate",
@@ -2186,9 +2296,9 @@ def decide(
                 next_expected = status
                 rule_id = "needs_user_confirmation"
                 reason = "job needs user confirmation"
-            add_gate_check(root, checks, gate)
-            add_worker_check(root, checks, worker_file)
-            add_script_check(root, checks, script_file)
+            add_gate_check(contract_root, checks, gate)
+            add_worker_check(contract_root, checks, worker_file)
+            add_script_check(contract_root, checks, script_file)
             cost_state = cost_state_for(state_job, cost_policy, cost_class)
             return {
                 "decision": "stop",
@@ -2214,7 +2324,7 @@ def decide(
         gate = "RUNNER_STATE.json"
         worker_file = "workers/manual_review_worker.md"
         script_file = "none"
-        add_worker_check(root, checks, worker_file)
+        add_worker_check(contract_root, checks, worker_file)
         cost_state = cost_state_for(state_job, cost_policy, "free_check")
         return {
             "decision": "stop",
@@ -2278,10 +2388,14 @@ def decide(
             script_file = self_audit_rule.get("script_file", CHECKER_REVIEW_SCRIPT)
             cost_class = rule.get("cost_class", "free_check")
             cost_state = cost_state_for(state_job, cost_policy, cost_class)
-            add_gate_check(root, checks, gate)
-            add_worker_check(root, checks, worker_file)
-            add_script_check(root, checks, script_file)
-            add_checker_checks(root, checks, self_audit_rule.get("checker_agent", CHECKER_AGENT_FILE))
+            add_gate_check(contract_root, checks, gate)
+            add_worker_check(contract_root, checks, worker_file)
+            add_script_check(contract_root, checks, script_file)
+            add_checker_checks(
+                contract_root,
+                checks,
+                self_audit_rule.get("checker_agent", CHECKER_AGENT_FILE),
+            )
             return {
                 "decision": "continue",
                 "reason": f"self-audit enabled for stop rule `{rule.get('id', '')}`",
@@ -2310,9 +2424,9 @@ def decide(
     script_file = rule.get("script_file", "none")
     cost_class = rule.get("cost_class", "free_check")
     cost_state = cost_state_for(state_job, cost_policy, cost_class, approval_context)
-    add_gate_check(root, checks, gate)
-    add_worker_check(root, checks, worker_file)
-    add_script_check(root, checks, script_file)
+    add_gate_check(contract_root, checks, gate)
+    add_worker_check(contract_root, checks, worker_file)
+    add_script_check(contract_root, checks, script_file)
 
     return {
         "decision": decision,
@@ -2334,15 +2448,24 @@ def decide(
     }
 
 
-def decision_markdown(root, job, result):
+def decision_markdown(root, job, result, lifecycle=None):
     now = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     retry_state = result.get("retry_state") or {}
     cost_state = result.get("cost_state") or {}
     delivery = user_facing_delivery(job, result)
     paths = inspection_paths(root, job, result)
-    stage = user_visible_stage(result.get("canonical_stage"), job.get("status"), job.get("next_stage"))
+    stage = user_visible_stage(
+        result.get("canonical_stage"),
+        job.get("status"),
+        job.get("next_stage"),
+        lifecycle,
+    )
     next_expected = str(result.get("next_expected") or "").strip()
-    next_stage = stage if next_expected in {"", "same"} else user_visible_stage("", next_expected, "")
+    next_stage = (
+        stage
+        if next_expected in {"", "same"}
+        else user_visible_stage("", next_expected, "", lifecycle)
+    )
     lines = [
         "# 当前进度",
         "",
@@ -2452,7 +2575,15 @@ def decision_markdown(root, job, result):
     return "\n".join(lines)
 
 
-def gate_record_markdown(root, job, decision, event, job_state, retry_limit):
+def gate_record_markdown(
+    root,
+    job,
+    decision,
+    event,
+    job_state,
+    retry_limit,
+    lifecycle=None,
+):
     transition_preview = {
         "canonical_stage": "terminal" if event["result"] == "PASS" and decision.get("next_expected") == "done" else decision.get("canonical_stage", ""),
         "next_expected": decision.get("next_expected"),
@@ -2464,9 +2595,23 @@ def gate_record_markdown(root, job, decision, event, job_state, retry_limit):
         transition_preview,
     )
     paths = inspection_paths(root, job, decision)
-    stage = user_visible_stage(event.get("stage"), job.get("status"), job.get("next_stage"))
+    stage = user_visible_stage(
+        event.get("stage"),
+        job.get("status"),
+        job.get("next_stage"),
+        lifecycle,
+    )
     next_expected = str(decision.get("next_expected") or "").strip()
-    next_stage = stage if next_expected in {"", "same"} else user_visible_stage(transition_preview.get("canonical_stage"), next_expected, "")
+    next_stage = (
+        stage
+        if next_expected in {"", "same"}
+        else user_visible_stage(
+            transition_preview.get("canonical_stage"),
+            next_expected,
+            "",
+            lifecycle,
+        )
+    )
     lines = [
         "# 阶段记录",
         "",
@@ -2523,8 +2668,13 @@ def gate_record_markdown(root, job, decision, event, job_state, retry_limit):
     return "\n".join(lines)
 
 
-def decision_event(job, result):
-    stage = user_visible_stage(result.get("canonical_stage"), job.get("status"), job.get("next_stage"))
+def decision_event(job, result, lifecycle=None):
+    stage = user_visible_stage(
+        result.get("canonical_stage"),
+        job.get("status"),
+        job.get("next_stage"),
+        lifecycle,
+    )
     return {
         "type": "decision",
         "job": job.get("id", ""),
@@ -2551,6 +2701,15 @@ def decision_event(job, result):
 def main():
     parser = argparse.ArgumentParser(description="Minimal video replication loop runner.")
     parser.add_argument("--root", default="viral-replica-loop", help="Loop root directory.")
+    parser.add_argument(
+        "--execution-context",
+        default="",
+        help=(
+            "Canonical context written by the package launcher. When present, "
+            "mutable state comes from its Workspace and immutable contracts "
+            "come from its Plugin Root."
+        ),
+    )
     parser.add_argument("--job-id", default="", help="Select a specific job id. Useful for auto-runs that must stay pinned to one job.")
     parser.add_argument("--allow-paid", action="store_true", help="Allow paid/batch generation stages.")
     parser.add_argument("--approval-recorded", action="store_true", help="Mark that explicit user approval for the current paid action has been recorded.")
@@ -2574,6 +2733,14 @@ def main():
     parser.add_argument("--record-gate-result", choices=sorted(GATE_RESULTS), help="Record a gate result in RUNNER_STATE.json.")
     parser.add_argument("--outcome-type", choices=sorted(GATE_OUTCOMES), default="", help="QC outcome taxonomy for this gate result.")
     parser.add_argument("--why-not-fail", default="", help="Required when --outcome-type VISUAL_WARNING explains why the warning is not a hard failure.")
+    parser.add_argument(
+        "--advisory-usable-artifact",
+        action="store_true",
+        help=(
+            "Advance a mechanically usable artifact when the only remaining "
+            "QC Risk Ledger failures are semantic."
+        ),
+    )
     parser.add_argument("--apply-transition", action="store_true", help="Apply PASS/FAIL/STOP transition to jobs.csv after recording a gate result.")
     parser.add_argument("--failure-type", default="", help="Failure type for FAIL results, e.g. thin_mud or rhythm_drift.")
     parser.add_argument("--retry-variable", default="", help="The single variable changed on the next retry.")
@@ -2591,16 +2758,44 @@ def main():
 
     if args.apply_transition and not args.record_gate_result:
         parser.error("--apply-transition requires --record-gate-result")
+    if args.advisory_usable_artifact and not (
+        args.record_gate_result == "PASS"
+        and args.outcome_type == "VISUAL_WARNING"
+        and args.why_not_fail.strip()
+    ):
+        parser.error(
+            "--advisory-usable-artifact requires PASS, VISUAL_WARNING, "
+            "and --why-not-fail"
+        )
 
     root = Path(args.root).resolve()
+    contract_root = root
+    if args.execution_context:
+        try:
+            execution_context = CanonicalExecutionContext.load(
+                Path(args.execution_context)
+            )
+        except ExecutionContextError as exc:
+            parser.error(str(exc))
+        root = execution_context.state_root
+        contract_root = execution_context.contract_root
+        if args.job_id and args.job_id != execution_context.job_id:
+            parser.error(
+                "--job-id does not match the Job bound by --execution-context"
+            )
+        args.job_id = execution_context.job_id
     lock_path = root / ".run-loop.lock"
     with lock_path.open("w", encoding="utf-8") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
 
         jobs_path = root / "jobs.csv"
-        stage_config, _ = load_stage_rules(root)
+        stage_config, stage_rules_path = load_stage_rules(contract_root)
+        lifecycle = LifecycleRegistry.from_config(
+            stage_config,
+            path=stage_rules_path,
+        )
         runner_state, runner_state_path = load_runner_state(root)
-        cost_policy, _ = load_cost_policy(root)
+        cost_policy, _ = load_cost_policy(contract_root)
         jobs, job_fieldnames = read_jobs_table(jobs_path)
         requested_job_id = args.job_id.strip()
         selected_job_id = requested_job_id or (select_job_id(root, self_audit=args.self_audit, allow_paid=args.allow_paid) or "")
@@ -2609,7 +2804,7 @@ def main():
 
         if job is None:
             reason = f"job `{requested_job_id}` not found" if requested_job_id else "no runnable jobs found"
-            stage = DEFAULT_USER_VISIBLE_STAGE
+            stage = lifecycle.progress().as_dict()
             text = "\n".join([
                 "# 当前进度",
                 "",
@@ -2646,6 +2841,7 @@ def main():
                     args.record_gate_result == "PASS"
                     and int(args.spent_gpt_image_runs or 0) == 0
                 ),
+                contract_root=contract_root,
             )
             result = apply_optional_caption_transition(root, job, result)
             if (
@@ -2698,8 +2894,20 @@ def main():
                     event["visual_qc_reuse_state"] = reuse_snapshot.get("state_path")
                 retry_limit = int(runner_state.get("retry_limit", DEFAULT_RETRY_LIMIT) or DEFAULT_RETRY_LIMIT)
                 transition = transition_for_gate_result(job, result, event, stage_config)
-                text = gate_record_markdown(root, job, result, event, job_state, retry_limit)
-                transition_text = transition_markdown(transition, args.apply_transition)
+                text = gate_record_markdown(
+                    root,
+                    job,
+                    result,
+                    event,
+                    job_state,
+                    retry_limit,
+                    lifecycle,
+                )
+                transition_text = transition_markdown(
+                    transition,
+                    args.apply_transition,
+                    lifecycle,
+                )
                 text = text + "\n\n" + transition_text
                 if not args.dry_run:
                     write_runner_state(runner_state_path, runner_state)
@@ -2710,7 +2918,7 @@ def main():
                         apply_transition_to_jobs(jobs, transition)
                         write_jobs_table(jobs_path, jobs, job_fieldnames)
             else:
-                text = decision_markdown(root, job, result)
+                text = decision_markdown(root, job, result, lifecycle)
 
         print(text)
         if not args.dry_run and not args.record_gate_result:
@@ -2723,7 +2931,10 @@ def main():
                 if start_stage_attempt(job_state, job, result):
                     runner_state["updated_at"] = now_iso()
                     write_runner_state(runner_state_path, runner_state)
-                append_event_log(root, decision_event(job, result))
+                append_event_log(
+                    root,
+                    decision_event(job, result, lifecycle),
+                )
             print(f"\nWrote: {out}")
         elif not args.dry_run and args.record_gate_result:
             print(f"\nWrote: {runner_state_path}")

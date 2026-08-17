@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "purpose": "Keep expressions natural without overloading Seedance prompts.",
+  "single_person": {
+    "mode": "single_person_budgeted",
+    "source": "video_understanding_plus_native_face_timeline",
+    "max_chars_per_shot": 36,
+    "max_clauses_per_shot": 3,
+    "max_blink_phrases_per_cue": 1,
+    "selection_priority": [
+      "correct a visibly wrong opening eye state",
+      "preserve one motivated gaze or expression change",
+      "summarize source-supported natural or consecutive blinks without imposing a count"
+    ],
+    "no_blink_fallback": {
+      "enabled": true,
+      "min_face_detection_coverage": 0.8,
+      "scope": "single_person_face_performance",
+      "cue_source_prefix": "natural_blink_fallback:",
+      "selection_priority": [
+        "action release or skin rebound",
+        "gaze return after a hand passes the face",
+        "settled head turn or natural speech pause"
+      ]
+    }
+  },
+  "multi_person": {
+    "mode": "multi_person_semantic",
+    "source": "existing_video_understanding",
+    "max_chars_per_shot": 24,
+    "max_clauses_per_shot": 2,
+    "blink_policy": "omit"
+  }
+}

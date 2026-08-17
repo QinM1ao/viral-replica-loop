@@ -195,6 +195,7 @@ def summarize_events(events, selected_jobs=None):
     slow_areas = defaultdict(lambda: {"events": 0, "elapsed": 0, "examples": []})
     timeline_by_job = defaultdict(list)
     non_image_pre_seedance = Counter()
+    time_breakdown = Counter()
 
     for event in filtered:
         job = event_job(event)
@@ -234,6 +235,39 @@ def summarize_events(events, selected_jobs=None):
                 if start:
                     elapsed = max(0, (event_time - start).total_seconds())
             event["_gate_elapsed"] = elapsed
+            explicit_breakdown = any(
+                key in event
+                for key in (
+                    "active_seconds",
+                    "provider_wait_seconds",
+                    "checker_wait_seconds",
+                    "user_wait_seconds",
+                    "unclassified_wait_seconds",
+                )
+            )
+            if explicit_breakdown:
+                time_breakdown["local_active"] += max(
+                    0.0,
+                    float(event.get("active_seconds") or 0.0),
+                )
+                time_breakdown["provider_wait"] += max(
+                    0.0,
+                    float(event.get("provider_wait_seconds") or 0.0),
+                )
+                time_breakdown["checker_wait"] += max(
+                    0.0,
+                    float(event.get("checker_wait_seconds") or 0.0),
+                )
+                time_breakdown["user_wait"] += max(
+                    0.0,
+                    float(event.get("user_wait_seconds") or 0.0),
+                )
+                time_breakdown["unclassified_wait"] += max(
+                    0.0,
+                    float(event.get("unclassified_wait_seconds") or 0.0),
+                )
+            else:
+                time_breakdown["unclassified_wait"] += elapsed
             summary["result_elapsed"][result] += elapsed
             categories = classify_categories(event)
             for category in categories:
@@ -258,6 +292,7 @@ def summarize_events(events, selected_jobs=None):
         "slow_areas": slow_areas,
         "timeline_by_job": timeline_by_job,
         "non_image_pre_seedance": non_image_pre_seedance,
+        "time_breakdown": time_breakdown,
     }
 
 
@@ -390,6 +425,21 @@ def render_report(summary, log_path, selected_jobs=None, timeline_limit=12, non_
             )
     else:
         lines.append("- No measured non-image pre-Seedance gate time.")
+
+    lines.extend(
+        [
+            "",
+            "## Time Breakdown",
+            "",
+            "| Type | Time |",
+            "|---|---:|",
+            f"| Local active | {format_duration(summary['time_breakdown']['local_active'])} |",
+            f"| Provider wait | {format_duration(summary['time_breakdown']['provider_wait'])} |",
+            f"| Checker wait | {format_duration(summary['time_breakdown']['checker_wait'])} |",
+            f"| User / approval wait | {format_duration(summary['time_breakdown']['user_wait'])} |",
+            f"| Unclassified wait | {format_duration(summary['time_breakdown']['unclassified_wait'])} |",
+        ]
+    )
 
     lines.extend(["", "## Focused Timelines", ""])
     if selected_jobs:

@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "skill": "minimax-h3-replica",
+  "execution_kind": "recorded_fixture",
+  "cases": [
+    {
+      "id": "h3-output-single-unit-preflight",
+      "task": "Prepare a 13-second MiniMax H3 replica and stop before paid generation.",
+      "input_files": [
+        ".agents/skills/minimax-h3-replica/SKILL.md",
+        ".agents/skills/minimax-h3-replica/references/ref2va-prompt-standard.md",
+        ".agents/skills/minimax-h3-replica/references/wujie-request.md"
+      ],
+      "baseline_failures": [
+        "May rebuild Seedance storyboards and depth references despite the direct H3 edit route.",
+        "May write a plot summary instead of the six-section Ref2VA prompt.",
+        "May pass a short source timbre sample as reference_audio even though target words and product facts changed.",
+        "May submit before public media and nested param JSON are validated."
+      ],
+      "with_skill_assertions": [
+        "One H3 unit covers the complete 13-second source interval.",
+        "The prompt contains all six Ref2VA sections and one Shot per measured source interval.",
+        "Changed speech binds one complete TTS master to the prompt and upload manifest and remains blocked until direct user listening approval.",
+        "The saved request reconstructs to taskCode 2513, MiniMax-H3, the intended roles, and reachable public media.",
+        "The workflow stops before task_create without explicit generation approval."
+      ],
+      "evidence_status": "file-backed fixture"
+    },
+    {
+      "id": "h3-output-long-source-split",
+      "task": "Prepare a source-faithful MiniMax H3 replica for a 25-second spoken source.",
+      "input_files": [
+        ".agents/skills/minimax-h3-replica/SKILL.md",
+        "tools/asr_transcribe.py"
+      ],
+      "baseline_failures": [
+        "May split mechanically at 15 seconds through speech or an unfinished action.",
+        "May omit a brief source shot or duplicate a boundary interval.",
+        "May use model-guessed speech instead of the ElevenLabs word timeline.",
+        "May reuse a safe boundary from another Job whose source hash does not match."
+      ],
+      "with_skill_assertions": [
+        "Units are at most 15 seconds and split at a safe measured visual and speech boundary.",
+        "Ordered units cover the requested source exactly once without gaps or overlaps.",
+        "ElevenLabs text, speakers, word timestamps, and sentence segments remain the sole speech evidence.",
+        "Any reused timeline or boundary is rejected unless its recorded source hash matches the current source bytes."
+      ],
+      "evidence_status": "file-backed fixture"
+    },
+    {
+      "id": "h3-output-generation-and-finish",
+      "task": "Generate approved MiniMax H3 units, inspect the raw results, and deliver an exact-voice master.",
+      "input_files": [
+        ".agents/skills/minimax-h3-replica/SKILL.md",
+        ".agents/skills/minimax-h3-replica/references/wujie-request.md"
+      ],
+      "baseline_failures": [
+        "May auto-resubmit after a gateway query error and create duplicate paid tasks.",
+        "May overwrite the raw output during audio replacement.",
+        "May assume fully_copy guarantees waveform passthrough."
+      ],
+      "with_skill_assertions": [
+        "Each approved unit creates at most one new Task Key and queries that key through transient errors.",
+        "The raw H3 video remains preserved and independently inspectable.",
+        "Exact wording and voice are delivered from the approved master after visual acceptance when H3 audio is not proven identical.",
+        "A failed unit stops with evidence and no automatic paid retry."
+      ],
+      "evidence_status": "file-backed fixture"
+    },
+    {
+      "id": "h3-output-complete-person-replacement",
+      "task": "Replace two source-video people and every old product while preserving the source scenes, actions, and camera work.",
+      "input_files": [
+        ".agents/skills/minimax-h3-replica/SKILL.md",
+        ".agents/skills/minimax-h3-replica/references/ref2va-prompt-standard.md"
+      ],
+      "baseline_failures": [
+        "May transfer only facial identity while retaining the source person's clothing or body.",
+        "May use a person reference image as a scene, lighting, composition, or camera reference.",
+        "May state the replacement only once and lose the target person or product after a hard cut."
+      ],
+      "with_skill_assertions": [
+        "Each person subject transfers the complete face, hair, body, skin tone, hands, clothing, and visible accessories to exactly one assigned role.",
+        "Person pictures supply only the complete person and clothing; backgrounds, environments, lighting, composition, framing, poses, actions, and camera behavior come from the source video.",
+        "The source video is partially_preserved when people, clothing, products, or overlays change.",
+        "Every relevant Shot repeats the complete-person, target-clothing, source-environment, and replacement-product bindings after each hard cut.",
+        "Prompt QC rejects identity-only replacement, source-clothing retention, person-picture background transfer, and any unbound old-product appearance."
+      ],
+      "evidence_status": "file-backed fixture"
+    }
+  ]
+}

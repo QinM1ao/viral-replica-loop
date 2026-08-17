@@ -11,6 +11,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -630,6 +631,30 @@ def _normalize_prepared_requests(prepared_requests):
     return normalized
 
 
+def _runner_expected_outputs(root, part, *, preflight):
+    provider = Path(part["out_dir"])
+    paths = [
+        provider / "request.json",
+        provider / "request_contract.json",
+        provider / "active_visual_asset_preflight.json",
+        provider / "reference_audio_preflight.json",
+    ]
+    if not preflight:
+        paths.extend(
+            [
+                provider / "create_response.json",
+                provider / "task_key.txt",
+                provider / "task_info.json",
+                provider / "task_info_history.jsonl",
+                provider / "summary.json",
+                provider / "ffprobe.json",
+                provider / "cover_last_frame.jpg",
+                Path(part["output_path"]),
+            ]
+        )
+    return [_display_path(root, path) for path in paths]
+
+
 def build_plan(
     root,
     job_id,
@@ -817,6 +842,7 @@ def build_plan(
         "schema_version": 1,
         "job_id": job_id,
         "stage": stage,
+        "job_output_root": _display_path(root, _job_dir(root, job_id)),
         "coordinator_only_paths": [
             _display_path(
                 root,
@@ -846,6 +872,12 @@ def build_plan(
                     root,
                     item["stage_completion_path"],
                 ),
+                "expected_outputs": _runner_expected_outputs(
+                    root,
+                    item,
+                    preflight=False,
+                ),
+                "promote_on_failure": True,
             }
             for item in parts
         ],
@@ -1309,7 +1341,7 @@ def _summary_result(root, part):
 def _default_runner(command, cwd):
     return subprocess.run(
         command,
-        cwd=cwd,
+        cwd=Path(__file__).resolve().parent.parent,
         text=True,
         capture_output=True,
         check=False,
@@ -1381,6 +1413,10 @@ def _preflight_execution_plan(root, plan):
         "schema_version": 1,
         "job_id": plan["job_id"],
         "stage": f"{plan['stage']}_preflight",
+        "job_output_root": _display_path(
+            root,
+            _job_dir(root, plan["job_id"]),
+        ),
         "coordinator_only_paths": [
             _display_path(root, attempt_dir / "preflight_report.json"),
         ],
@@ -1400,6 +1436,12 @@ def _preflight_execution_plan(root, plan):
                     Path(part["completion_path"]).parent
                     / "preflight_stage_execution_completion.json",
                 ),
+                "expected_outputs": _runner_expected_outputs(
+                    root,
+                    part,
+                    preflight=True,
+                ),
+                "promote_on_failure": True,
             }
             for part in plan["parts"]
         ],
@@ -1435,11 +1477,14 @@ def preflight_plan(root, plan, runner=None, max_workers=3):
             part,
             selected_runner,
         )
-        runtime_root = Path(packet["allowed_write_roots"][0])
         result["outputs"] = [
             str(path)
-            for path in sorted(runtime_root.rglob("*"))
-            if path.is_file() and not path.is_symlink()
+            for path in (
+                Path(part["out_dir"]) / "request.json",
+                Path(part["out_dir"]) / "request_contract.json",
+                Path(part["out_dir"]) / "reference_audio_preflight.json",
+            )
+            if path.is_file()
         ]
         return result
 
@@ -1537,6 +1582,7 @@ def _run_one_part(root, plan, part, runner):
     command = list(part["command"])
     part_dir = _resolve_path(root, part["completion_path"]).parent
     part_dir.mkdir(parents=True, exist_ok=True)
+    provider_started = time.perf_counter()
     try:
         result = runner(command, root)
         returncode = int(getattr(result, "returncode", result))
@@ -1546,6 +1592,7 @@ def _run_one_part(root, plan, part, runner):
         returncode = 1
         stdout = ""
         stderr = f"runner raised: {exc}"
+    provider_wait_seconds = time.perf_counter() - provider_started
 
     stdout_path = part_dir / "stdout.txt"
     stderr_path = part_dir / "stderr.txt"
@@ -1562,6 +1609,7 @@ def _run_one_part(root, plan, part, runner):
         "approval_claims": plan["approval_claims"],
         "status": "FAIL",
         "returncode": returncode,
+        "provider_wait_seconds": provider_wait_seconds,
         "summary_path": part["summary_path"],
         "output_path": part["output_path"],
         "stdout_path": str(stdout_path),
@@ -1673,14 +1721,19 @@ def run_reserved_parts(
                     )
                 )
         _write_json(runtime_part["completion_path"], completion)
-        runtime_part_root = Path(packet["allowed_write_roots"][0])
-        outputs = [
-            str(path)
-            for path in sorted(runtime_part_root.rglob("*"))
-            if path.is_file() and not path.is_symlink()
+        output_candidates = [
+            *(Path(value) for value in packet.get("expected_outputs") or []),
+            Path(runtime_part["completion_path"]),
+            Path(runtime_part["completion_path"]).parent / "stdout.txt",
+            Path(runtime_part["completion_path"]).parent / "stderr.txt",
         ]
+        outputs = [str(path) for path in output_candidates if path.is_file()]
         result = {
-            "status": completion["status"],
+            # The sealed packet itself completed and its evidence must be
+            # promoted even when the provider returned a terminal failure.
+            # Provider PASS/FAIL stays in the promoted completion.json and is
+            # applied to the fanout report below.
+            "status": "PASS",
             "outputs": outputs,
             "returncode": completion["returncode"],
         }
@@ -1752,6 +1805,17 @@ def run_reserved_parts(
         "fanout_policy": FANOUT_POLICY,
         "reservation_path": str(path),
         "results": completions,
+        "provider_wait_seconds": max(
+            (
+                float(item.get("provider_wait_seconds") or 0.0)
+                for item in completions
+            ),
+            default=0.0,
+        ),
+        "provider_task_wait_seconds_total": sum(
+            float(item.get("provider_wait_seconds") or 0.0)
+            for item in completions
+        ),
         "overall": (
             "PASS"
             if completions

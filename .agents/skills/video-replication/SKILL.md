@@ -37,7 +37,8 @@ description: |
 - active image hash、approved visual manifest、素材角色、prompt reference roles 没变时，生成前导演包复用 image batch 的重视觉 QC，只跑轻量同步检查。
 - 带声音多 Part 只在 reference audio 边界阶段跑 ASR；最终成片默认不跑 ASR。
 - Part1/Part2/Part3 的改图、素材上传、Seedance 生成可并行；改图并行必须先用 `tools/image_batch_fanout.py plan` 生成 Part 级证据路径，每个 Part 写独立 `contracts/partX_contract.json`，完成后用 `tools/image_batch_fanout.py merge` 串行合并为共享 `codex_imagegen_contract.json`；共享 `jobs.csv`、`RUNNER_STATE.json`、`STATE.md` 写回必须由 loop coordinator 串行。
-- loop kit 的新任务把剧情分析和源分镜整理合并为一个 `source_blueprint` round：ASR、接触表、Part storyboard 和 `source_rhythm.json` 并行准备，同一源视频的确定性事实按 hash 复用；`source_rhythm.json` 用真实硬切、5fps 证据帧、原始 ASR 和声音能量锁住原片节奏，产品替换策略和当前人物/产品判断不能从缓存照搬。
+- loop kit 的新任务把剧情分析和源分镜整理合并为一个连续的 `source_blueprint` round：ASR、接触表、完整视频理解、快速钩子复核、初始 Part storyboard、源节奏证据和本地脸部检测按 sealed plan 并发；准备报告不是完成信号，必须在同一 round 内继续作者化完整 `source_rhythm.json`、跑节奏 QC、对全部 beat 只做一次批量画面核对并从已通过证据局部修复失败 beat，然后重建源节奏分镜并通过现有 Gate。同一源视频的确定性事实按 hash 复用；Gate PASS 前不得启动图片或视频生成。
+- 表情走 [表情提示预算](references/expression-prompt-budget.md)：同一次完整视频理解直接产出常规表情，单人近景才从并发脸部检测中选少量纠偏节点，多人只用已有语义表情且不新增眨眼提示。后续只读 `expression_prompt_profile.json`，不再次理解视频。
 - 生成前导演包只手写一份 `output/<job-id>/seedance/director_plan.json`。`tools/pre_seedance_pack.py render` 机械派生 voiceover、shot-line map、缝点、素材角色表、每 Part prompt 和选定的 web/API 交付文件，避免多份文档人工同步。
 - 到 Seedance 前停默认只生成 `web` 交付；直接生成最终视频默认只生成 `api` request；只有用户明确要两套时才用 `both`。
 
@@ -176,7 +177,7 @@ source "$HOME/.config/wujieai/env"
 
 > **绝对不能跳过这一步。口播文案必须从原视频提取并默认逐句锁定；只能改用户或当前产品事实指定的局部槽位，不能凭分镜自己编。**
 
-在这个 loop kit 中，必须运行 `tools/prepare_source_blueprint.py`。它通过 Wujie Higress `/v1/chat/completions` 并发调用两次 `doubao-seed-2-0-mini-260215`：全片 2fps 看完整结构，开头 0–3 秒 5fps 专门看快速动作；同时只运行一个 Qwen ASR。`rules/VIDEO_UNDERSTANDING_MODEL.json` 是唯一模型配置。可用的视频分析 MCP 只能做补充，不能替代这条项目路线。
+在这个 loop kit 中，必须运行 `tools/prepare_source_blueprint.py`。它通过 Wujie Higress `/v1/chat/completions` 并发调用两次 `doubao-seed-2-0-mini-260215`：全片 2fps 看完整结构，开头 0–3 秒 5fps 专门看快速动作；同时通过正式端运行一个 ElevenLabs Scribe v1 ASR。`rules/VIDEO_UNDERSTANDING_MODEL.json` 与 `rules/ASR_MODEL.json` 分别是语义理解和 ASR 的唯一模型配置。可用的视频分析 MCP 只能做补充，不能替代这条项目路线。
 
 ```bash
 python3 tools/video_understanding.py \
@@ -185,18 +186,18 @@ python3 tools/video_understanding.py \
 ```
 
 Seed 2.0 Mini 输出必须整理并核验成：
-- 全片语义结构和快速钩子的动作顺序/动作类型；精确口播来自 Qwen ASR，不从 Seed 的 `spoken_content` 抄写
+- 全片语义结构和快速钩子的动作顺序/动作类型；原始口播、speaker ID、词级时间戳和句子边界来自 ElevenLabs，不从 Seed 的 `spoken_content` 抄写
 - 每一句的说话人/声音来源：女主同期声、同事同期声、群体反应、画外音旁白、混合；多人视频不能合并成一条不区分角色的“总口播”
 - 说话方式判断（画外音旁白 / 画面内同期声）
 - 画面动作时间线
 - 原片剧情骨架：冲突、反转、卖点、价格/福利、收口
 - 需要删除/替换/弱化的人物关系（例如多女主、抢戏同事）
 
-这些数据是后续写口播、写 Seedance 提示词、判断缝点的主要语义依据。快速钩子必须读取 `video_understanding/hook_review/aligned_timeline.json`：Seed 只决定“发生了什么”，ffmpeg 实测切点决定“何时发生”，Qwen ASR 决定“说了什么”。模型输出不能覆盖直接证据；冲突时以直接证据为准。
+这些数据是后续写口播、写 Seedance 提示词、判断缝点的主要语义依据。快速钩子必须读取 `video_understanding/hook_review/aligned_timeline.json` 和 `asr/asr_timeline.json`：Seed 只决定“发生了什么”，ffmpeg 实测切点决定视觉事件“何时发生”，ElevenLabs 决定原始语音“说了什么、谁在说、词在何时出现”。模型输出不能覆盖直接证据；冲突时以直接证据为准。
 
 ### 0b. 抽帧和 ASR 做证据核验
 
-无论模型结果是否看似完整，都用 ffmpeg 抽帧和 Qwen ASR 做辅助核验。Seed 2.0 Mini provider 失败时必须 STOP，不能靠接触表假装已经完成视频理解：
+无论模型结果是否看似完整，都用 ffmpeg 抽帧和 ElevenLabs ASR 做辅助核验。Seed 2.0 Mini 或 ElevenLabs provider 失败时必须 STOP，不能靠接触表假装已经完成视频理解：
 
 ```bash
 mkdir -p "<输出目录>/视频分析/frames_2fps"
@@ -224,8 +225,9 @@ ffmpeg -y -i "<视频路径>" \
 - `actual_cut_points` 来自 ffmpeg scene score，不用均匀 12 帧反推切点。
 - `evidence_frames` 默认 5fps，专门捕捉一闪而过的动态字幕、手势和动作峰值；0.5fps 接触表只能看大结构。
 - 开头快速动作先由 5fps hook review 拆出语义顺序，再由 `aligned_timeline.json` 吸附到 `actual_cut_points`；不得直接使用模型常见的 0.5 秒粗时间格。
-- 每个有声 beat 用 `asr_span.start/end` 指向不可改写的原始 ASR。允许改标点；错字必须列 `from/to/evidence_type=visible_text`，并有时间戳字幕观察和证据帧。
+- 每个有声 beat 用 `asr_span.start/end` 指向不可改写的原始 ASR。允许改标点；错字优先列 `from/to/evidence_type=visible_text`，并有时间戳字幕观察和证据帧。明显的语义错词可用 `evidence_type=semantic_review`，但必须记录具体理由且 `confidence>=0.9`；有歧义时不自动改。
 - 每个 beat 必填：源起止时间、同期声/旁白/静音、重音词、尾停顿、动作峰值、画面动作、情绪功能、节奏类型、复刻优先级、进出转场和证据帧。
+- 含脸 beat 读取同一源 hash 的 `expression_prompt_profile.json`，在 `expression_cue` 内执行 [表情提示预算](references/expression-prompt-budget.md)。单人按源片实际表情节拍选择能消除呆板或纠正错误首态的节点，不设固定 Part cue 或眨眼次数上限；多人复用视频理解的常规表情并省略眨眼提示。
 - schema v3 每个 beat 还必填 scene、camera、framing 和 `visual_action_type`。台词里说“涂”不代表画面真的在涂；只有像素中出现接触/运动/结果状态变化时才标 `physical_change`，并引用三张不同的 before/peak/after 帧。
 - 快速钩子要拆成真实的短拍，例如“问题词 → 重音动作词 → 第二个问题词 → 重音动作词”，不能整理成一条平滑长句。
 
@@ -822,6 +824,8 @@ Seedance 交付必须包含：
 
 viral-replica-loop 的默认视频生成模型只改 EP，不改流程：
 
+先检查当前 Job 是否存在 `seedance25_route_lock.json`。存在时本节不适用，后续提示词、素材包、请求、提交和重试全部转交 `../seedance-25-replica/SKILL.md`；Seedance 2.5 不可用或失败时 STOP，不得使用本节的 Seedance 2.0 默认值继续。
+
 ```json
 {
   "model_name": "Seedance 2.0",
@@ -843,7 +847,7 @@ viral-replica-loop 的默认视频生成模型只改 EP，不改流程：
 
 ```bash
 source "$HOME/.config/wujieai/env"
-python3 ~/.codex/skills/seedance/scripts/seedance.py \
+python3 <client-owned-seedance-route> \
   --prompt-file "<Part提示词.txt>" \
   --images "https://api.qinmiao.space/uploads/.../person.png" \
   --image-role reference_image \
@@ -913,7 +917,7 @@ python3 ~/.codex/skills/seedance/scripts/seedance.py \
 
 ```bash
 source "$HOME/.config/wujieai/env"
-python3 ~/.codex/skills/seedance-magic-mirror-video-prompt/scripts/run_seedance_magic_mirror.py \
+python3 <legacy-seedance-prompt-experiment> \
   --prompt-file "<Part提示词.txt>" \
   --image-file "<分镜或参考图.jpg>" \
   --output "<输出Part.mp4>" \
@@ -934,7 +938,7 @@ python3 ~/.codex/skills/seedance-magic-mirror-video-prompt/scripts/run_seedance_
 ```bash
 source "$HOME/.config/wujieai/env"
 env -i PATH="$PATH" HOME="$HOME" GATEWAY_API_KEY="$GATEWAY_API_KEY" \
-python3 ~/.codex/skills/seedance/scripts/seedance.py \
+python3 <client-owned-seedance-route> \
   --prompt-file "<Part提示词.txt>" \
   --output "<输出Part.mp4>" \
   --model ep-20260521101914-nwv8j \
@@ -953,6 +957,7 @@ python3 ~/.codex/skills/seedance/scripts/seedance.py \
 - 付费尝试预算和提交授权必须分开。在 `viral-replica-loop` 中，当前任务批准只覆盖每个 Part 一次；无论失败重试，还是对已经成功的 Part 做质量重抽，每一次新的 provider 提交都必须有新的定向批准，且不得自动重提。仓库外的独立工作流可以预先设预算，但预算本身不构成提交授权。生成后记录 `Seedance_take_log.md`：`Take N · 改了什么 · seed/素材是否变化 · 结论[保留/后期修/编辑/重抽/重写] · 证据一句话`。
 - 一次只改一个变量：只换 seed、只改一句提示词、只换一张参考图、只换模式，不能同时改很多项。
 - 如果主目标已经达成，次要瑕疵能后期修，就锁定，不要为了细枝末节继续烧次数。
+- 成片整体合格但一个连续区间的动作、手脸接触、手势、节奏或场景光影不还原时，调用 `$video-shot-refinement`：用一张身份图、一张已换好目标人物的原场景光影图和一条纯灰度深度动作视频生成最短修复片段，再通过显式本地剪辑只替换该区间；已通过 Part、其余时间线和原音频保持锁定。
 - 同一问题连续出现两次，说明不是运气差，要回到素材角色表或预算分配重写：例如产品细节不稳，就减少人物动作和背景复杂度；人物不像，就减少大动作和远景；口播重复，就重切参考音频。
 - `同步调用三方API失败: 接入HTTP请求异常`：先按上游/网关失败处理，不要立刻改提示词；在 `viral-replica-loop` 中停止自动提交，只有取得新的定向批准后才可保持输入不变再提交一次。
 - taskCode 真人脸任务失败：先检查公网 URL 是否可访问，再确认 `taskCode=2509/2508` 是否与当前渠道匹配。不要直接切回 ai_router，除非用户明确同意。

@@ -24,7 +24,7 @@ Turn one source video into a usable replication brief before any image, voice, s
 
 1. Read the selected job row and `PRODUCT_CONSTRAINTS.md`.
 2. Extract or inspect source audio.
-3. Run `tools/prepare_story_analysis.py`; its required Wujie Higress Seed 2.0 Mini call supplies semantic video understanding. Run Qwen ASR when original speech is needed.
+3. Run `tools/prepare_story_analysis.py`; its required Wujie Higress Seed 2.0 Mini call supplies semantic video understanding. Run ElevenLabs Scribe v1 when original speech is needed, preserving raw words, speaker IDs, sentence segments, and word timestamps.
 4. Extract subtitles if the source video has visible subtitles.
 5. Create a visual timeline or contact sheet from the source video.
 6. Build a shot table with:

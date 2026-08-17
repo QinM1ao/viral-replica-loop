@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "binding_id": "pf-01-frozen-input-v1",
+  "ordered_references": [
+    {
+      "role": "source_video",
+      "path": "core/source_4s.mkv",
+      "sha256": "6a539fda58034f8026b1ff713a4505d1c3a8f6bd75299d5446303d87e147156d"
+    },
+    {
+      "role": "source_audio",
+      "path": "core/source_audio_4s.wav",
+      "sha256": "b96b3022aa647995316522141b8e0aa74b65eb9905f144182fb53c8378b9ef24"
+    },
+    {
+      "role": "product_reference",
+      "path": "core/product_reference.svg",
+      "sha256": "6e6d648b4ee74929181273d70d23e5c25d7d03a5abbdc2ddc8a34ae622f8be79"
+    },
+    {
+      "role": "source_locked_script",
+      "path": "core/source_script.json",
+      "sha256": "576f4dafc6d286498b59d89170b7934e0f812cc125fed6e3e7880ca78745ec58"
+    }
+  ],
+  "audio_facts": {
+    "codec": "pcm_u8_wav",
+    "sample_rate_hz": 8000,
+    "channels": 1,
+    "sample_count": 32000,
+    "duration_seconds": 4.0,
+    "audible": true
+  }
+}

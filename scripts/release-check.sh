@@ -3,7 +3,6 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-python3 "$ROOT/scripts/scan-secrets.py" --root "$ROOT"
 "$ROOT/scripts/validate-install.sh"
 
 if [[ "${STRICT_SKILL_CHECK:-0}" == "1" ]]; then

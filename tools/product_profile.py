@@ -264,6 +264,12 @@ def build_product_profile(root, job):
             or generic_rule.get("usage_action")
             or "replace source action with the current product's real usage action"
         ),
+        "source_action_policy": (
+            sku_rule.get("source_action_policy")
+            or category_rule.get("source_action_policy")
+            or generic_rule.get("source_action_policy")
+            or "translate_only_when_physically_incompatible"
+        ),
     }
 
 

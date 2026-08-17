@@ -1,0 +1,21 @@
+{
+  "name": "video-shot-refinement",
+  "version": "1.2.0",
+  "owner": "qmio / viral-replica-loop",
+  "updated_at": "2026-07-29",
+  "status": "active",
+  "purpose": "Repair a bounded visual interval after main video generation by combining one identity image, one target-person scene and lighting image, and one grayscale depth action video, then cutting the accepted patch back into the locked master.",
+  "entrypoint": ".agents/skills/video-shot-refinement/SKILL.md",
+  "output_contract": [
+    "The main video-replication workflow remains the source of truth.",
+    "Each run repairs one continuous interval.",
+    "The Seedance request binds identity, scene and lighting, and depth motion as distinct reference roles.",
+    "Audible intervals bind reference audio and generate audio; proven-silent visual patches preserve the master audio during deterministic local replacement.",
+    "Multi-shot repairs bind a source-verified motion blueprint with exact shot count, hard cuts, trajectories, peaks, and end states.",
+    "Motion and expression remain separate evidence chains and must both pass.",
+    "Accepted regions outside the replacement interval remain locked."
+  ],
+  "evals": {
+    "trigger_cases": "evals/trigger_cases.json"
+  }
+}

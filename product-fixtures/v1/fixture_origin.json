@@ -1,0 +1,410 @@
+{
+  "schema_version": 1,
+  "suite_id": "viral-replica-non-client-parity-v1",
+  "non_client_statement": "Every byte was newly hand-authored for product validation and represents no live or historical client work.",
+  "fixtures": [
+    {
+      "fixture_id": "PF-01 core-audible-source-locked",
+      "source": "repository-owned synthetic design created for Product Fixture Suite v1",
+      "license_or_authorization": "Viral Replica product team authored and authorized private plugin redistribution",
+      "non_client": true,
+      "content_summary": "Four-second illustrated audio-bearing MKV, exact 5fps evidence frames, WAV, geometric SVG product/current-job storyboard, source-locked script, sealed zero-submit recorder replay, and an exact Wujie Higress HTTP fixture for the production video-understanding seam.",
+      "expected_logical_roles": [
+        "source_video",
+        "source_audio",
+        "product_reference",
+        "current_job_storyboard",
+        "source_locked_script",
+        "provider_request_summary",
+        "provider_synthetic_response"
+      ],
+      "sha256": "c46ca317e15f66eedff4822c41f09dbae356bcaace6ccf77709a11b06f0c710b",
+      "creation_tool": "hand-authored deterministic text, SVG and Y4M plus locally synthesized ffmpeg media and 5fps PNG evidence",
+      "redistribution_rights": "included in authorized private Viral Replica Plugin releases",
+      "files": [
+        {
+          "path": "core/source.y4m",
+          "sha256": "25d3a0d864209acf09e35050cd9b2028779103bddff05cd318a54ab96607fbee",
+          "bytes": 55
+        },
+        {
+          "path": "core/source_4s.mkv",
+          "sha256": "6a539fda58034f8026b1ff713a4505d1c3a8f6bd75299d5446303d87e147156d",
+          "bytes": 70319
+        },
+        {
+          "path": "core/source_audio.pcm_u8",
+          "sha256": "975ee66f1a2bd55d322a03f20ca2cb5934c0e78900f1c4d773d77ce6e8911239",
+          "bytes": 8000
+        },
+        {
+          "path": "core/source_audio_4s.wav",
+          "sha256": "b96b3022aa647995316522141b8e0aa74b65eb9905f144182fb53c8378b9ef24",
+          "bytes": 32044
+        },
+        {
+          "path": "core/product_reference.svg",
+          "sha256": "6e6d648b4ee74929181273d70d23e5c25d7d03a5abbdc2ddc8a34ae622f8be79",
+          "bytes": 257
+        },
+        {
+          "path": "core/storyboard.svg",
+          "sha256": "229cbc5d6f3b98fab33ef49e698b39bed57ab82e2f6435b4e8f9c4aaab652f2b",
+          "bytes": 1102
+        },
+        {
+          "path": "core/source_script.json",
+          "sha256": "576f4dafc6d286498b59d89170b7934e0f812cc125fed6e3e7880ca78745ec58",
+          "bytes": 279
+        },
+        {
+          "path": "core/input_binding.json",
+          "sha256": "44e1d6a54a7c5416a400e8e20f32fe7f17385155fac6e0d8c2f811c583c92898",
+          "bytes": 951
+        },
+        {
+          "path": "provider/request.json",
+          "sha256": "0505cc39c68365c254a4faca9593d321522901f234a325864eb39f1b1453f10f",
+          "bytes": 1848
+        },
+        {
+          "path": "provider/response.json",
+          "sha256": "8cb746e71235056752b0d571ff956d2769e1a13ae29fbac5bb07f24b786bb7c4",
+          "bytes": 536
+        },
+        {
+          "path": "provider/recording.json",
+          "sha256": "3406882ca95480ca4bb4806941c502f5e344833529171682b1c11648857c0358",
+          "bytes": 814
+        },
+        {
+          "path": "provider/wujie_request_contract.json",
+          "sha256": "7f62cced97fb7779ae277004bca753cd00da4f929c7d06cb1d1c481a8f8b6804",
+          "bytes": 599
+        },
+        {
+          "path": "provider/wujie_response.json",
+          "sha256": "12c33d641e728339bcea5217f07c2cb46cc0278a6e6d3a15540540cdc1ad7323",
+          "bytes": 2109
+        },
+        {
+          "path": "core/source_frames/frame_001.png",
+          "sha256": "d695c33d94f139d02bda2130d08311e237e8f07a3b5ef4d782f346a2cd0d5f45",
+          "bytes": 1654
+        },
+        {
+          "path": "core/source_frames/frame_002.png",
+          "sha256": "a6053c23549ddd5948fa0ad85e438db07ff6182e01227b11c7a0f2fcef9f99af",
+          "bytes": 1651
+        },
+        {
+          "path": "core/source_frames/frame_003.png",
+          "sha256": "50cf0171127bff1bef9d343cfecc561884a9fad726c349c25d4cf031acaa5a26",
+          "bytes": 1652
+        },
+        {
+          "path": "core/source_frames/frame_004.png",
+          "sha256": "80ce041110269a70611b0ec80c67886e89b09ac9948c6828a97e7fdcc87457e0",
+          "bytes": 1646
+        },
+        {
+          "path": "core/source_frames/frame_005.png",
+          "sha256": "3c6ca122d0afb263390ea2c108a50c29fd7e130f013814b3c78aa87551056bf7",
+          "bytes": 1649
+        },
+        {
+          "path": "core/source_frames/frame_006.png",
+          "sha256": "b768c72bb43696ee28240003bb22c0240134e6b7a5aca9ab1902867d3e4734aa",
+          "bytes": 1705
+        },
+        {
+          "path": "core/source_frames/frame_007.png",
+          "sha256": "cb9a21f390832989da0a838dde82b46163bfedf5cf19508660bb88d4bdd12b1b",
+          "bytes": 1662
+        },
+        {
+          "path": "core/source_frames/frame_008.png",
+          "sha256": "04c0fb93315d6ef7a208c33d2c869be73e51eb68fb6baf5134516c7667a2809e",
+          "bytes": 1659
+        },
+        {
+          "path": "core/source_frames/frame_009.png",
+          "sha256": "548b9e37b20d206c4e7a3d14b9aa993fb3034ed146c9a844d08e5f03d683ef6b",
+          "bytes": 1657
+        },
+        {
+          "path": "core/source_frames/frame_010.png",
+          "sha256": "2ae808375ee76002653427eda51ddf28b876a9c5e25c9cba69d9a03b0b6814f3",
+          "bytes": 1649
+        },
+        {
+          "path": "core/source_frames/frame_011.png",
+          "sha256": "cdae6cddbc5497ac871ba88f235159b0845e81883ce696e9a5f708e328447323",
+          "bytes": 1657
+        },
+        {
+          "path": "core/source_frames/frame_012.png",
+          "sha256": "a4c9b9aa4ea274782b90c96fa4ed2b24845a607ff9e0735e2547e29f16b8db69",
+          "bytes": 1654
+        },
+        {
+          "path": "core/source_frames/frame_013.png",
+          "sha256": "366663e30d245c059a87319ab0482507eb73b471d88ca3c58566f44535357529",
+          "bytes": 1657
+        },
+        {
+          "path": "core/source_frames/frame_014.png",
+          "sha256": "deced11c49c5fa2a139120db24586a6a7b73919fc545907f6d0e9f3b4e1b95fd",
+          "bytes": 1587
+        },
+        {
+          "path": "core/source_frames/frame_015.png",
+          "sha256": "1a441952448f3ef33604e2a20afc0a64b1a5b1894af34c991271b811095c038a",
+          "bytes": 1590
+        },
+        {
+          "path": "core/source_frames/frame_016.png",
+          "sha256": "e173844521c05ab329f803d402cb556dfd5279dc9263e15d23eb979b900aee91",
+          "bytes": 1589
+        },
+        {
+          "path": "core/source_frames/frame_017.png",
+          "sha256": "f4b9e881ab8fac5e854941c11acbe4afc9ce08a48a1cf2ad3ce310b43bb063cb",
+          "bytes": 1591
+        },
+        {
+          "path": "core/source_frames/frame_018.png",
+          "sha256": "eb874c98e72e16c8bc2c6a420b176c753524b11b3aba23a796b17d39deb1e073",
+          "bytes": 1592
+        },
+        {
+          "path": "core/source_frames/frame_019.png",
+          "sha256": "2043c3f52dd60dc95c3085142e93cd4baa07cfabf0056807190db01d9b5b3ab8",
+          "bytes": 1592
+        },
+        {
+          "path": "core/source_frames/frame_020.png",
+          "sha256": "c215ee9b47093d0093987edf72e3d95040447b36a36886a32840a77ab77406a9",
+          "bytes": 1591
+        }
+      ]
+    },
+    {
+      "fixture_id": "PF-02 branch-table",
+      "source": "repository-owned synthetic branch matrix created for Product Fixture Suite v1",
+      "license_or_authorization": "Viral Replica product team authored and authorized private plugin redistribution",
+      "non_client": true,
+      "content_summary": "Table-driven missing-input, product profile, storyboard-derived identity, approval, request rejection, local finishing, subtitle classification, and Final Technical QC branches.",
+      "expected_logical_roles": [
+        "branch_decision_table"
+      ],
+      "sha256": "bab6b9f04f1d544b63a18e58b3c0501ba49da18b688345abadd20ed681dd5f9d",
+      "creation_tool": "hand-authored deterministic JSON",
+      "redistribution_rights": "included in authorized private Viral Replica Plugin releases",
+      "files": [
+        {
+          "path": "branches/branch_table.json",
+          "sha256": "51808cfca29ed1f4f9fd3fe6d9df385721ef503d66babdcc726da7f06f63532d",
+          "bytes": 3500
+        }
+      ]
+    },
+    {
+      "fixture_id": "PF-03 failure-mutations",
+      "source": "repository-owned synthetic fail-closed mutations created for Product Fixture Suite v1",
+      "license_or_authorization": "Viral Replica product team authored and authorized private plugin redistribution",
+      "non_client": true,
+      "content_summary": "Single-variable request mutations for model, parameters, approval, reference order, expiry, network, submit, and golden refresh.",
+      "expected_logical_roles": [
+        "single_variable_failure_table"
+      ],
+      "sha256": "7bb72af7112ba18d7c681c4c413f1063e081c821b7a098bb4f98edc634bfc499",
+      "creation_tool": "hand-authored deterministic JSON",
+      "redistribution_rights": "included in authorized private Viral Replica Plugin releases",
+      "files": [
+        {
+          "path": "failures/single_variable_mutations.json",
+          "sha256": "1bcd4b7966a82598f57868f45e4731f76b13d0e6fa021defb93e0a5eb145075e",
+          "bytes": 2018
+        }
+      ]
+    },
+    {
+      "fixture_id": "PF-04 local-finalization",
+      "source": "repository-owned synthetic local finalization media created for Product Fixture Suite v1",
+      "license_or_authorization": "Viral Replica product team authored and authorized private plugin redistribution",
+      "non_client": true,
+      "content_summary": "Two exact caption-free audio-bearing MP4 Parts, their deterministic audio-bearing finishing master, retained tiny Y4M primitives, two distinct subtitle-classification MP4 inputs, and Final Technical QC expectations.",
+      "expected_logical_roles": [
+        "finishing_part_01",
+        "finishing_part_02",
+        "finishing_master",
+        "final_technical_qc_input",
+        "subtitle_clean_input",
+        "subtitle_burned_in_input"
+      ],
+      "sha256": "3cbc4f7a924769b6b65149ff3e356f58d1167f4684c5e2bbeaed6113f32cde6f",
+      "creation_tool": "hand-authored deterministic Y4M and JSON plus locally synthesized ffmpeg MP4",
+      "redistribution_rights": "included in authorized private Viral Replica Plugin releases",
+      "files": [
+        {
+          "path": "finalization/part-01.y4m",
+          "sha256": "8ddb469c725d93ad75a0d57faf9ac5784a52a08d03b7c015cef273118e2dc38b",
+          "bytes": 55
+        },
+        {
+          "path": "finalization/part-02.y4m",
+          "sha256": "f5d0b90d1ce477c1992266c5c231d5603d0a58d44e6280a79d3715a89bd95ddb",
+          "bytes": 55
+        },
+        {
+          "path": "finalization/final-master.y4m",
+          "sha256": "2a7c94235d84dbc7790bebf79037337f38927a4c6bd3da06988902d87e422424",
+          "bytes": 75
+        },
+        {
+          "path": "finalization/part-01.mp4",
+          "sha256": "bea2446fd62b6825943a8287b2539c12987b24f3789c105184b6a44582662c50",
+          "bytes": 26379
+        },
+        {
+          "path": "finalization/part-02.mp4",
+          "sha256": "f7cebc272aa92cdbd0d8c5b2646c7179842c6e7524236f4c2b2cb14c27d7c564",
+          "bytes": 25827
+        },
+        {
+          "path": "finalization/final-master.mp4",
+          "sha256": "7593eed1e4fbade04c9844f800abbc1d075dfb10d28291e1ca6243af66715578",
+          "bytes": 47876
+        },
+        {
+          "path": "finalization/media_expectations.json",
+          "sha256": "5ab7c1334de2123decacdf7377c2a22b09432dff1e9beb6c829424a61b71ce45",
+          "bytes": 533
+        },
+        {
+          "path": "finalization/subtitle-clean.mp4",
+          "sha256": "bfb913604208ba1749d9f34bb1c1ada793cdc33811780f3aeb97bcdf95ea1b82",
+          "bytes": 101222
+        },
+        {
+          "path": "finalization/subtitle-burned-in.mp4",
+          "sha256": "5f26e59f2312fa9abbaf059ba06a276bb11ebd65ee79ad44733c530996870d52",
+          "bytes": 86614
+        }
+      ]
+    },
+    {
+      "fixture_id": "PF-05 sealed-independent-checker-verdicts",
+      "source": "repository-owned independent product-fixture review authored outside the parity harness",
+      "license_or_authorization": "Viral Replica product team authored and authorized private plugin redistribution",
+      "non_client": true,
+      "content_summary": "Sealed semantic verdicts bound to exact stage fingerprints and distinct clean/burned-in classification inputs; the harness may bind but cannot choose their conclusions.",
+      "expected_logical_roles": [
+        "source_blueprint_checker_verdict",
+        "image_batch_checker_verdict",
+        "pre_seedance_checker_verdict",
+        "subtitle_classification_verdicts"
+      ],
+      "sha256": "ba9b0c6415d29d387c727f13b187e2d13547b528dc900b6fe3695e897eb14cb4",
+      "creation_tool": "independently reviewed deterministic JSON fixture",
+      "redistribution_rights": "included in authorized private Viral Replica Plugin releases",
+      "files": [
+        {
+          "path": "checker/sealed_stage_verdicts.json",
+          "sha256": "f3871de82296a1ee5229658f4723fc3c2ee599797b22c42531e44b9fc091083e",
+          "bytes": 4290
+        },
+        {
+          "path": "image/source_storyboard.png",
+          "sha256": "199337153cc084c24693534d46dddcd9f6c5141d902baf6df2de205bb2f063da",
+          "bytes": 12770
+        },
+        {
+          "path": "image/current_job_storyboard.png",
+          "sha256": "0c01a510bae03c8c34657ecf633829729aeb4891d70c5bfee7547f40d6b3d3a6",
+          "bytes": 10722
+        },
+        {
+          "path": "image/product_front.png",
+          "sha256": "12ec8bd4dbd5160a24cee5c86bfa6c169a81bbea1d31795a9f7c399076f2179d",
+          "bytes": 863
+        },
+        {
+          "path": "image/product_open.png",
+          "sha256": "4c365c4d7ecd9f6f7faad8ad13450b83a11c24a2ec8098808371dada16f79a49",
+          "bytes": 865
+        },
+        {
+          "path": "image/identity_ref.png",
+          "sha256": "65e697c5c17c6a1d53929ef45de5e929f7cb721c95df4a1a3730b9417f4489ff",
+          "bytes": 978
+        },
+        {
+          "path": "image/image_prompt.txt",
+          "sha256": "19cd35982fedf79e659eaef8859ba80e60748e62639a7db75532c82048e494ba",
+          "bytes": 470
+        },
+        {
+          "path": "image/sealed_image_contract.json",
+          "sha256": "078d758cefd6de3bffafd9a327a53cbfcbdf4ec25ba135edb107298c526e236e",
+          "bytes": 4105
+        },
+        {
+          "path": "provider/image_request.json",
+          "sha256": "39582daa7242b4a6c4562d0d2817ed48d658cb94ff733b7f712c2b561e838673",
+          "bytes": 1737
+        },
+        {
+          "path": "provider/image_response.json",
+          "sha256": "af201f0db827edfe191f3ce3dc9aac10fe53d7c5a5bee9cc6aacbe0b16ae9cf6",
+          "bytes": 504
+        },
+        {
+          "path": "provider/image_recording.json",
+          "sha256": "bbac054204622893edc9dd91b130e42bd6712125b4ee0ce4fd7968ccdfe0464c",
+          "bytes": 826
+        }
+      ]
+    }
+  ],
+  "suite_files": [
+    {
+      "path": "README.md",
+      "sha256": "ef2a73a3d4ef472fc7ee2090cf58f9ad3483c75911ff09d7652bf32acb5d796f",
+      "bytes": 1138
+    },
+      {
+        "path": "suite.json",
+        "sha256": "458b561f1936cdd9089f7007db586ec485c37b37824f2c9abcf704375b7b2647",
+        "bytes": 2343
+      },
+    {
+      "path": "shared/runtime_contract.json",
+      "sha256": "291bf930980e6814a7fa03e2809faf67374aaa6aa85a08ab94ee8066b401ef22",
+      "bytes": 647
+    },
+    {
+      "path": "shared/effective_profile.json",
+      "sha256": "afbcb25b7c0ad50e6abeef782993c10fc7af6c4cb6338ccdf90466bd66eee414",
+      "bytes": 755
+    },
+    {
+      "path": "shared/approval.json",
+      "sha256": "11cdb6aad14d87028bea8eab8235fc852c969cf17c629f7342fd7f739b3f8df4",
+      "bytes": 267
+    },
+    {
+      "path": "shared/expected_logical_roles.json",
+      "sha256": "bf1940efac563e3648bb0fea540b6e5af51229b79ed3a84357f227eca712ff48",
+      "bytes": 616
+    }
+  ],
+  "forbidden_source_classes_absent": [
+    "real client Job",
+    "historical delivery",
+    "identifiable private person authorization evidence",
+    "Development Workspace run material",
+    "provider credential or task evidence"
+  ]
+}

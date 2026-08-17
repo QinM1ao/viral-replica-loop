@@ -13,10 +13,273 @@ SCRIPT = REPO_ROOT / "tools" / "source_rhythm_qc.py"
 PREPARE_SCRIPT = REPO_ROOT / "tools" / "prepare_source_rhythm.py"
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
-from source_rhythm_qc import check_director_plan
+from prepare_source_rhythm import annotate_evidence_frames
+from source_rhythm_qc import (
+    build_asr_timing_summary,
+    check_director_plan,
+    check_source_rhythm,
+    expected_line,
+)
+
+
+def bind_elevenlabs_evidence(root, evidence, source_sha256):
+    asr_dir = Path(root) / "asr"
+    asr_dir.mkdir()
+    timeline = {
+        "provider": "elevenlabs",
+        "model": "scribe_v1",
+        "transcription_id": "fixture-transcript",
+        "words": evidence["asr_words"],
+        "speaker_turns": evidence["speaker_turns"],
+        "sentence_segments": evidence["sentence_segments"],
+        "audio_events": evidence["audio_events"],
+    }
+    raw = {
+        "text": evidence["asr_text"],
+        "transcription_id": timeline["transcription_id"],
+        "words": timeline["words"],
+    }
+    raw_path = asr_dir / "elevenlabs_scribe_v1.json"
+    timeline_path = asr_dir / "asr_timeline.json"
+    manifest_path = asr_dir / "request_manifest.json"
+    raw_path.write_text(json.dumps(raw), encoding="utf-8")
+    timeline_path.write_text(json.dumps(timeline), encoding="utf-8")
+    raw_sha = hashlib.sha256(raw_path.read_bytes()).hexdigest()
+    timeline_sha = hashlib.sha256(timeline_path.read_bytes()).hexdigest()
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "provider": "elevenlabs",
+                "model": "scribe_v1",
+                "http_status": 200,
+                "transcription_id": timeline["transcription_id"],
+                "source_sha256": source_sha256,
+                "raw_response_sha256": raw_sha,
+                "timeline_sha256": timeline_sha,
+            }
+        ),
+        encoding="utf-8",
+    )
+    evidence.update(
+        {
+            "asr_source": str(asr_dir / "原口播ASR_elevenlabs.md"),
+            "asr_source_video_sha256": source_sha256,
+            "asr_timeline": {"path": str(timeline_path), "sha256": timeline_sha},
+            "asr_raw_response": {"path": str(raw_path), "sha256": raw_sha},
+            "asr_request_manifest": {
+                "path": str(manifest_path),
+                "sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+            },
+        }
+    )
+    return timeline_path
 
 
 class SourceRhythmQCTest(unittest.TestCase):
+    def test_high_confidence_semantic_review_can_correct_obvious_asr_error(self):
+        source_evidence = {
+            "asr_text": "一喷直接钻进基底。",
+            "asr_span_basis": "compact_alnum",
+        }
+        beat = {
+            "source_start": 0.0,
+            "source_end": 1.0,
+            "asr_span": {"start": 0, "end": 8},
+            "corrections": [
+                {
+                    "from": "基底",
+                    "to": "肌底",
+                    "evidence_type": "semantic_review",
+                    "reason": "护肤口播固定语境中‘钻进肌底’成立，‘钻进基底’语义不通",
+                    "confidence": 0.98,
+                }
+            ],
+        }
+
+        line, issues = expected_line(beat, source_evidence)
+
+        self.assertEqual(line, "一喷直接钻进肌底")
+        self.assertEqual(issues, [])
+
+    def test_semantic_review_without_reason_is_rejected(self):
+        source_evidence = {
+            "asr_text": "一喷直接钻进基底。",
+            "asr_span_basis": "compact_alnum",
+        }
+        beat = {
+            "source_start": 0.0,
+            "source_end": 1.0,
+            "asr_span": {"start": 0, "end": 8},
+            "corrections": [
+                {
+                    "from": "基底",
+                    "to": "肌底",
+                    "evidence_type": "semantic_review",
+                    "confidence": 0.98,
+                }
+            ],
+        }
+
+        _line, issues = expected_line(beat, source_evidence)
+
+        self.assertIn("semantic correction lacks high-confidence rationale", issues)
+
+    def test_elevenlabs_word_timestamps_bind_asr_spans_to_speakers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source_sha256 = "a" * 64
+            evidence = {
+                "asr_text": "你好。欢迎来。",
+                "asr_span_basis": "compact_alnum",
+                "asr_provider": "elevenlabs",
+                "asr_words": [
+                    {"text": "你", "start": 0.1, "end": 0.2, "type": "word", "speaker_id": "speaker_0"},
+                    {"text": "好", "start": 0.2, "end": 0.3, "type": "word", "speaker_id": "speaker_0"},
+                    {"text": "。", "start": 0.3, "end": 0.3, "type": "word", "speaker_id": "speaker_0"},
+                    {"text": "欢迎", "start": 0.8, "end": 1.0, "type": "word", "speaker_id": "speaker_1"},
+                    {"text": "来", "start": 1.0, "end": 1.1, "type": "word", "speaker_id": "speaker_1"},
+                    {"text": "。", "start": 1.1, "end": 1.1, "type": "word", "speaker_id": "speaker_1"},
+                ],
+                "speaker_turns": [{"speaker_id": "speaker_0"}, {"speaker_id": "speaker_1"}],
+                "sentence_segments": [{"text": "你好。"}, {"text": "欢迎来。"}],
+                "audio_events": [],
+            }
+            timeline_path = bind_elevenlabs_evidence(
+                tmp, evidence, source_sha256
+            )
+            beats = [
+                {"id": "beat-1", "asr_span": {"start": 0, "end": 2}},
+                {"id": "beat-2", "asr_span": {"start": 2, "end": 5}},
+            ]
+
+            summary, issues = build_asr_timing_summary(
+                evidence, beats, source_sha256
+            )
+            _unused_summary, source_issues = build_asr_timing_summary(
+                evidence, beats, "b" * 64
+            )
+
+            timeline_path.write_text("{}", encoding="utf-8")
+            _unused_summary, tampered_issues = build_asr_timing_summary(
+                evidence, beats, source_sha256
+            )
+
+        self.assertEqual(issues, [])
+        self.assertEqual(summary["speaker_ids"], ["speaker_0", "speaker_1"])
+        self.assertEqual(summary["sentence_segment_count"], 2)
+        self.assertEqual(
+            summary["beat_timings"],
+            [
+                {
+                    "beat_id": "beat-1",
+                    "start": 0.1,
+                    "end": 0.3,
+                    "speaker_ids": ["speaker_0"],
+                },
+                {
+                    "beat_id": "beat-2",
+                    "start": 0.8,
+                    "end": 1.1,
+                    "speaker_ids": ["speaker_1"],
+                },
+            ],
+        )
+        self.assertIn(
+            "asr_timeline_hash_mismatch",
+            {issue["code"] for issue in tampered_issues},
+        )
+        self.assertIn(
+            "asr_source_video_hash_mismatch",
+            {issue["code"] for issue in source_issues},
+        )
+
+    def test_cut_boundary_frame_is_rejected_before_semantic_review(self):
+        frames = annotate_evidence_frames(
+            [
+                {"time": 0.8, "path": "before.jpg"},
+                {"time": 1.0, "path": "at-cut.jpg"},
+                {"time": 1.2, "path": "after.jpg"},
+            ],
+            [{"time": 1.0, "score": 0.9}],
+            duration=2.0,
+            fps=5.0,
+        )
+        payload = {
+            "schema_version": 3,
+            "duration": 2.0,
+            "actual_cut_points": [{"time": 1.0, "score": 0.9}],
+            "evidence_frames": frames,
+            "source_evidence": {"asr_text": ""},
+            "beats": [
+                {
+                    "id": "beat-1",
+                    "source_start": 0.0,
+                    "source_end": 1.0,
+                    "confirmed_source_line": "",
+                    "speaker_mode": "silent",
+                    "emphasis_tokens": [],
+                    "pause_after_seconds": 0.0,
+                    "action_peak_times": [],
+                    "visual_action": "人物停顿",
+                    "visual_action_type": "gesture",
+                    "emotion_function": "建立反应",
+                    "rhythm_class": "setup",
+                    "replication_priority": "must_keep",
+                    "evidence_frame_refs": ["at-cut.jpg"],
+                    "entry_transition": "start",
+                    "exit_transition": "hard_cut",
+                    "scene": "室内",
+                    "camera": "固定机位",
+                    "framing": "中景",
+                }
+            ],
+        }
+
+        report = check_source_rhythm(payload)
+
+        self.assertIn(
+            "unsafe_cut_boundary_evidence",
+            {issue["code"] for issue in report["issues"]},
+        )
+
+    def test_cut_boundary_is_recomputed_when_cached_frame_lacks_safety_metadata(self):
+        payload = {
+            "schema_version": 3,
+            "duration": 2.0,
+            "evidence_fps": 5.0,
+            "actual_cut_points": [{"time": 1.0, "score": 0.9}],
+            "evidence_frames": [{"time": 1.0, "path": "at-cut.jpg"}],
+            "source_evidence": {"asr_text": ""},
+            "beats": [
+                {
+                    "id": "beat-1",
+                    "source_start": 0.0,
+                    "source_end": 1.0,
+                    "confirmed_source_line": "",
+                    "speaker_mode": "silent",
+                    "emphasis_tokens": [],
+                    "pause_after_seconds": 0.0,
+                    "action_peak_times": [],
+                    "visual_action": "人物停顿",
+                    "visual_action_type": "gesture",
+                    "emotion_function": "建立反应",
+                    "rhythm_class": "setup",
+                    "replication_priority": "must_keep",
+                    "evidence_frame_refs": ["at-cut.jpg"],
+                    "entry_transition": "start",
+                    "exit_transition": "hard_cut",
+                    "scene": "室内",
+                    "camera": "固定机位",
+                    "framing": "中景",
+                }
+            ],
+        }
+
+        report = check_source_rhythm(payload)
+
+        self.assertIn(
+            "unsafe_cut_boundary_evidence",
+            {issue["code"] for issue in report["issues"]},
+        )
     def run_qc(self, root, payload, *extra_args):
         rhythm_path = root / "source_rhythm.json"
         report_path = root / "source_rhythm_qc.json"

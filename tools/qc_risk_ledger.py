@@ -1015,6 +1015,82 @@ def final_qc_report_path(root, job_id, artifact=""):
     return root / "output" / job_id / "final" / "final_qc.json"
 
 
+def subtitle_removal_pass_binding(root, job_id):
+    root = Path(root).resolve()
+    output_dir = root / "output" / job_id
+    report_path = (
+        output_dir / "subtitle_removal" / "subtitle_removal_report.json"
+    )
+    ledger_path = (
+        output_dir / "checks" / "subtitle_removal_qc_risk_ledger.json"
+    )
+    issues = []
+    if not report_path.is_file():
+        return {}, [f"missing subtitle removal report: {report_path}"]
+    report = load_json(report_path)
+    if report.get("schema_version") != 1:
+        issues.append("subtitle removal report schema_version must be 1")
+    if report.get("overall") != "PASS":
+        issues.append("subtitle removal report is not PASS")
+
+    ledger = load_json(ledger_path) if ledger_path.is_file() else {}
+    if not ledger:
+        issues.append(f"missing passing subtitle scan ledger: {ledger_path}")
+    else:
+        if (
+            ledger.get("job_id") != job_id
+            or ledger.get("stage") != "subtitle_removal"
+            or ledger.get("overall") != "PASS"
+        ):
+            issues.append("subtitle scan ledger is not a passing current-job result")
+        families = ledger.get("families") or {}
+        contract = families.get("subtitle_removal_contract") or {}
+        presence = families.get("subtitle_presence_classification") or {}
+        if contract.get("status") != "PASS":
+            issues.append("subtitle removal contract did not pass")
+        if presence.get("status") != "PASS":
+            issues.append("full-timeline subtitle classification did not pass")
+        current_report_hash = sha256_file(report_path)
+        report_evidence_passed = False
+        for evidence in contract.get("evidence") or []:
+            evidence_path = resolve_path(root, evidence.get("path", ""))
+            if (
+                evidence_path
+                and evidence.get("status") == "PASS"
+                and evidence_path.resolve() == report_path.resolve()
+                and evidence.get("sha256") == current_report_hash
+            ):
+                report_evidence_passed = True
+                break
+        if not report_evidence_passed:
+            issues.append(
+                "subtitle removal report changed after its passing subtitle scan"
+            )
+
+    output_path = resolve_path(
+        root,
+        report.get("output_video"),
+        base=report_path.parent,
+    )
+    output_hash = str(report.get("output_sha256") or "")
+    final_dir = (output_dir / "final").resolve()
+    try:
+        output_path.resolve().relative_to(final_dir)
+    except (AttributeError, ValueError):
+        issues.append("subtitle removal output is outside the current final directory")
+    if not output_path or not output_path.is_file():
+        issues.append(f"active subtitle-removal output is missing: {output_path}")
+    elif not output_hash:
+        issues.append("subtitle removal output has no hash binding")
+    elif sha256_file(output_path) != output_hash:
+        issues.append("subtitle removal output hash does not match the current file")
+
+    return {
+        "output_path": output_path.resolve() if output_path else None,
+        "output_sha256": output_hash,
+    }, issues
+
+
 def final_artifact_family(root, job_id, artifact=""):
     report_path = final_qc_report_path(root, job_id, artifact)
     report = load_json(report_path) if report_path.is_file() else {}
@@ -1143,6 +1219,7 @@ def build_subtitle_removal_ledger(root, job_id, stage, artifact, previous, write
                 "checks": [
                     "distinguish burned-in captions from valid scene text",
                     "confirm no caption interval was missed across the full timeline",
+                    "reject obvious wrong person, wrong product, broken material, or visible seam break",
                 ],
             },
         })

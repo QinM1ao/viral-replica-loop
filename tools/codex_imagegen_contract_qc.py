@@ -147,6 +147,10 @@ def display_path(root, path):
     if path is None:
         return ""
     try:
+        return str(path.relative_to(root))
+    except ValueError:
+        pass
+    try:
         return str(path.resolve().relative_to(root.resolve()))
     except (FileNotFoundError, ValueError):
         return str(path)
@@ -504,7 +508,7 @@ def prompt_required_groups(product_profile):
             patterns = [str(item) for item in group.get("patterns", []) if str(item)]
             if patterns:
                 normalized.append((str(group["name"]), patterns))
-    if normalized:
+    if normalized or "prompt_required_groups" in product_profile:
         return normalized
     return PROMPT_REQUIRED_GROUPS if profile_requires_mud_contract(product_profile) else TONER_PROMPT_REQUIRED_GROUPS
 

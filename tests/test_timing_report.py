@@ -71,6 +71,35 @@ class TimingReportTest(unittest.TestCase):
         self.assertIn("PASS:10m 1s", report)
         self.assertIn("| `job-fast` | 10m 1s | 20m | **PASS** |", report)
 
+    def test_time_breakdown_keeps_local_and_wait_time_separate(self):
+        event = {
+            "type": "gate_result",
+            "time": "2026-07-10T10:00:00",
+            "job": "job-fast",
+            "stage": "pre_seedance_pack",
+            "result": "PASS",
+            "duration_seconds": 100,
+            "active_seconds": 12,
+            "provider_wait_seconds": 50,
+            "checker_wait_seconds": 8,
+            "user_wait_seconds": 20,
+            "unclassified_wait_seconds": 10,
+            "_line": 1,
+            "_time": timing_report.parse_time("2026-07-10T10:00:00"),
+        }
+
+        summary = timing_report.summarize_events([event])
+        report = timing_report.render_report(summary, Path("events.jsonl"))
+
+        self.assertEqual(summary["time_breakdown"]["local_active"], 12)
+        self.assertEqual(summary["time_breakdown"]["provider_wait"], 50)
+        self.assertEqual(summary["time_breakdown"]["checker_wait"], 8)
+        self.assertEqual(summary["time_breakdown"]["user_wait"], 20)
+        self.assertEqual(summary["time_breakdown"]["unclassified_wait"], 10)
+        self.assertIn("| Local active | 12s |", report)
+        self.assertIn("| Provider wait | 50s |", report)
+        self.assertIn("| User / approval wait | 20s |", report)
+
     def test_budget_separates_reused_job_ids_by_workflow_run(self):
         events = []
         for index, (run_id, duration) in enumerate((("run-a", 400), ("run-b", 500)), start=1):

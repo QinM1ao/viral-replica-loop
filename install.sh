@@ -36,6 +36,7 @@ if missing:
     sys.exit(1)
 PY
 
+python3 "$ROOT/tools/run_face_expression_detector.py" --prepare
 "$ROOT/scripts/validate-install.sh"
 
 echo "Loop kit installed: $ROOT"

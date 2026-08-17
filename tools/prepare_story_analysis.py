@@ -47,7 +47,15 @@ def run_asr(video, out_dir):
     script = Path(__file__).resolve().parent / "asr_transcribe.py"
     if not script.exists():
         return None, "asr_transcribe.py not found"
-    result = run([sys.executable, str(script), str(video), "--out-dir", str(out_dir / "asr")])
+    result = run(
+        [
+            sys.executable,
+            str(script),
+            str(video),
+            "--out-dir",
+            str(out_dir / "asr"),
+        ]
+    )
     if result.returncode != 0:
         return None, result.stderr[-1000:] or result.stdout[-1000:]
     return result.stdout.strip().splitlines()[-1], ""
@@ -123,7 +131,7 @@ def write_md(
         "- raw ASR spans and speaker mode",
         "- source pixels for action peaks and physical changes",
         "",
-        "For rapid hooks, use the 5fps hook review for action order, the aligned timeline for measured boundaries, and Qwen ASR for words.",
+        "For rapid hooks, use the 5fps hook review for action order, the aligned timeline for measured boundaries, and ElevenLabs ASR for words, speakers, and sentence timestamps.",
         "",
         "Model analysis is not allowed to override contradictory pixel, subtitle, or ASR evidence.",
         "",
@@ -171,7 +179,11 @@ def main():
     )
     with ThreadPoolExecutor(max_workers=worker_count) as executor:
         contact_future = executor.submit(make_contact_sheet, args.video, contact_sheet, args.contact_fps)
-        asr_future = executor.submit(run_asr, args.video, args.out_dir) if args.run_asr else None
+        asr_future = (
+            executor.submit(run_asr, args.video, args.out_dir)
+            if args.run_asr
+            else None
+        )
         understanding_future = (
             executor.submit(
                 run_video_understanding,

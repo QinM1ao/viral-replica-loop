@@ -1,0 +1,56 @@
+{
+  "name": "minimax-h3-replica",
+  "version": "0.1.1",
+  "owner": "qmio / viral-replica-loop",
+  "updated_at": "2026-08-11",
+  "review_cadence": "per-release",
+  "status": "active",
+  "maturity_tier": "governed",
+  "lifecycle_stage": "production",
+  "purpose": "Run a lightweight source-faithful MiniMax H3 Ref2VA replication lane when the user explicitly selects MiniMax H3.",
+  "input_files": [
+    {
+      "path": ".agents/skills/minimax-h3-replica/references/ref2va-prompt-standard.md",
+      "evidence": "file-backed fixture"
+    },
+    {
+      "path": ".agents/skills/minimax-h3-replica/references/wujie-request.md",
+      "evidence": "file-backed fixture"
+    },
+    {
+      "path": "tools/asr_transcribe.py",
+      "evidence": "file-backed fixture"
+    },
+    {
+      "path": ".agents/skills/minimax-h3-replica/scripts/audio_master_gate.py",
+      "evidence": "file-backed fixture"
+    },
+    {
+      "path": ".agents/skills/minimax-h3-replica/scripts/voxcpm2_generate.py",
+      "evidence": "file-backed fixture"
+    }
+  ],
+  "output_contract": [
+    "The route activates only for an explicit MiniMax H3 replication request.",
+    "ElevenLabs word timestamps control speech timing and FFmpeg measured cuts control visual timing.",
+    "Timelines, cuts, transcripts, and boundaries are reusable only when their recorded source hash matches the current source bytes.",
+    "Every source interval maps to exactly one ordered H3 Shot and one unit of at most 15 seconds.",
+    "Every prompt follows the six-section Ref2VA structure and uses an audio marker matching the real mix intent.",
+    "Changed speech cannot pass pre-generation QC without one full VoxCPM2 master per unit, generation provenance, matching prompt and upload hashes, deterministic postmix policy, and direct user listening approval.",
+    "Every paid unit creates at most one Task Key, preserves its request and raw output, and receives no automatic retry.",
+    "Exact-delivery audio remains bound to the approved master rather than an unverified H3 waveform-copy claim."
+  ],
+  "exclusions": [
+    "Does not replace the generic viral-replica route when MiniMax H3 is not named.",
+    "Does not require storyboard image editing, depth references, or Seedance handoff artifacts.",
+    "Does not treat a Wujie create response or generic query error as a successful or failed MiniMax generation outcome."
+  ],
+  "rollback_boundary": "The Skill, prompt standard, request standard, and public wrapper may be reverted without deleting existing Job timelines, approved audio masters, Task Keys, requests, raw outputs, or accepted videos.",
+  "trust_report": "reports/trust_report.md",
+  "output_quality_scorecard": "reports/output_quality_scorecard.md",
+  "evals": {
+    "trigger_cases": "evals/trigger_cases.json",
+    "output_cases": "evals/output_cases.json"
+  },
+  "release_state": "release_ready"
+}

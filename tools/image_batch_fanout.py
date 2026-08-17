@@ -17,6 +17,7 @@ except ImportError:
 
 FANOUT_POLICY = "part_contracts_then_serial_merge"
 DEFAULT_STAGE = "image_batch_qc"
+STOP_EXIT_CODE = 3
 GENERATOR = (
     Path(__file__).resolve().parents[1]
     / ".agents"
@@ -121,6 +122,73 @@ def required_storyboard_parts(root, job_id):
         pid = f"part{match.group(1)}" if match else path.stem
         parts.append({"part": part_id(pid), "source_storyboard": path})
     return sorted(parts, key=lambda item: part_sort_key(item["part"]))
+
+
+def source_storyboard_lock(root, job_id):
+    manifest_path = storyboard_manifest_path(root, job_id)
+    if not manifest_path.is_file():
+        raise ValueError("source storyboard lock requires a storyboard manifest")
+    manifest = load_json(manifest_path)
+    if manifest.get("selection_mode") != "source_rhythm":
+        raise ValueError("source storyboard lock requires selection_mode=source_rhythm")
+    parts = []
+    for item in manifest.get("parts") or []:
+        if not isinstance(item, dict):
+            continue
+        pid = part_id(item.get("part"))
+        path = resolve_path(root, item.get("path"))
+        if not pid or path is None or not path.is_file():
+            raise ValueError(f"source storyboard lock has a missing Part: {pid or '<unknown>'}")
+        if item.get("frame_count") != 12:
+            raise ValueError(f"source storyboard lock requires exactly 12 frames for {pid}")
+        parts.append(
+            {
+                "part": pid,
+                "path": display_path(root, path),
+                "sha256": stage_execution.sha256_file(path),
+                "frame_count": 12,
+            }
+        )
+    if not parts:
+        raise ValueError("source storyboard lock has no Parts")
+    parts.sort(key=lambda item: part_sort_key(item["part"]))
+    output = job_dir(root, job_id)
+    rhythm_path = output / "剧情分析" / "source_rhythm.json"
+    rhythm_qc_path = output / "checks" / "source_rhythm_qc.json"
+    visual_qc_path = output / "checks" / "source_rhythm_visual_review_qc.json"
+    for path in (rhythm_path, rhythm_qc_path, visual_qc_path):
+        if not path.is_file():
+            raise ValueError(f"source storyboard lock requires {path.name}")
+    rhythm_sha256 = stage_execution.sha256_file(rhythm_path)
+    for path in (rhythm_qc_path, visual_qc_path):
+        report = load_json(path)
+        if report.get("overall") != "PASS":
+            raise ValueError(f"source storyboard lock requires passing {path.name}")
+        if report.get("source_rhythm_sha256") != rhythm_sha256:
+            raise ValueError(f"source storyboard lock has stale {path.name}")
+    return {
+        "selection_mode": "source_rhythm",
+        "manifest_path": display_path(root, manifest_path),
+        "manifest_sha256": stage_execution.sha256_file(manifest_path),
+        "source_evidence": {
+            "source_rhythm_path": display_path(root, rhythm_path),
+            "source_rhythm_sha256": rhythm_sha256,
+            "source_rhythm_qc_path": display_path(root, rhythm_qc_path),
+            "source_rhythm_qc_sha256": stage_execution.sha256_file(rhythm_qc_path),
+            "visual_review_qc_path": display_path(root, visual_qc_path),
+            "visual_review_qc_sha256": stage_execution.sha256_file(visual_qc_path),
+        },
+        "parts": parts,
+    }
+
+
+def validate_source_storyboard_lock(root, job_id, expected):
+    try:
+        current = source_storyboard_lock(root, job_id)
+    except ValueError as exc:
+        raise ValueError(f"source storyboard lock is invalid: {exc}") from exc
+    if current != expected:
+        raise ValueError("source storyboard lock changed after image plan creation")
 
 
 def prompt_candidates(root, job_id, pid):
@@ -289,6 +357,11 @@ def validate_fanout_plan(root, plan):
     unsigned.pop("plan_sha256")
     if stage_execution.stable_hash(unsigned) != expected_hash:
         raise ValueError("fanout plan hash mismatch")
+    validate_source_storyboard_lock(
+        root,
+        plan.get("job_id"),
+        plan.get("source_storyboard_lock"),
+    )
 
     execution = plan.get("stage_execution")
     if not execution:
@@ -323,6 +396,7 @@ def validate_fanout_plan(root, plan):
 
 def build_plan(root, job_id, stage=DEFAULT_STAGE):
     specs = load_part_specs(root, job_id)
+    storyboard_lock = source_storyboard_lock(root, job_id)
     required = required_storyboard_parts(root, job_id)
     if not required:
         raise ValueError("image-batch plan has no required source storyboard Parts")
@@ -394,6 +468,7 @@ def build_plan(root, job_id, stage=DEFAULT_STAGE):
         "fanout_policy": FANOUT_POLICY,
         "shared_state_policy": "only merge and loop gate/state writes are serialized",
         "required_parts": [item["part"] for item in parts],
+        "source_storyboard_lock": storyboard_lock,
         "parts": parts,
         "merge_command": merge_command,
         "plan_path": display_path(
@@ -409,6 +484,7 @@ def build_plan(root, job_id, stage=DEFAULT_STAGE):
         "schema_version": 1,
         "job_id": job_id,
         "stage": stage,
+        "job_output_root": display_path(root, job_dir(root, job_id)),
         "coordinator_only_paths": [
             display_path(root, default_merged_contract(root, job_id)),
             display_path(
@@ -417,6 +493,11 @@ def build_plan(root, job_id, stage=DEFAULT_STAGE):
                 / "visual-assets"
                 / "approved_visual_manifest.json",
             ),
+            storyboard_lock["manifest_path"],
+            storyboard_lock["source_evidence"]["source_rhythm_path"],
+            storyboard_lock["source_evidence"]["source_rhythm_qc_path"],
+            storyboard_lock["source_evidence"]["visual_review_qc_path"],
+            *[item["path"] for item in storyboard_lock["parts"]],
         ],
         "packets": [
             execution_packet(root, job_id, stage, part)
@@ -656,14 +737,45 @@ def run_part_command(
     proc = runner(command, cwd=root, text=True, capture_output=True, check=False)
     stdout_path.write_text(proc.stdout, encoding="utf-8")
     stderr_path.write_text(proc.stderr, encoding="utf-8")
-    return {
+    invocation_path = resolve_path(root, part.get("invocation_manifest"))
+    invocation_evidence = {}
+    if invocation_path and invocation_path.is_file():
+        try:
+            invocation_evidence = load_json(invocation_path)
+        except (OSError, json.JSONDecodeError):
+            invocation_evidence = {}
+    stopped = proc.returncode in {2, 3}
+    result = {
         "part": pid,
-        "status": "PASS" if proc.returncode == 0 else "FAIL",
+        "status": "PASS" if proc.returncode == 0 else "STOP" if stopped else "FAIL",
         "returncode": proc.returncode,
         "duration_seconds": round(time.time() - started, 3),
         "stdout": display_path(root, stdout_path),
         "stderr": display_path(root, stderr_path),
     }
+    if proc.returncode != 0:
+        result["error"] = (proc.stderr or "generator exited without an error message")[-2000:]
+    if invocation_evidence:
+        result["invocation_evidence"] = invocation_evidence
+        for key in (
+            "failure_kind",
+            "provider_outcome",
+            "automatic_retry_allowed",
+            "read_timeout_seconds",
+        ):
+            if key in invocation_evidence:
+                result[key] = invocation_evidence[key]
+    return result
+
+
+def is_unknown_provider_outcome(result):
+    return (
+        result.get("failure_kind") == "provider_result_unknown"
+        or (
+            result.get("provider_outcome") == "unknown"
+            and result.get("automatic_retry_allowed") is False
+        )
+    )
 
 
 def completion_outputs(root, part):
@@ -816,14 +928,20 @@ def run_fanout(root, job_id, plan_path, max_workers, runner=subprocess.run):
                     ),
                 }
         results = [results_by_id[part["part"]] for part in parts]
+        provider_result_unknown = any(
+            is_unknown_provider_outcome(result)
+            for result in results
+        )
         report = {
             "schema_version": 1,
             "job_id": job_id,
             "stage": plan.get("stage", DEFAULT_STAGE),
             "fanout_policy": FANOUT_POLICY,
             "results": results,
-            "overall": stage_report["overall"],
+            "overall": "STOP" if provider_result_unknown else stage_report["overall"],
         }
+        if provider_result_unknown:
+            report["stop_reason"] = "provider_result_unknown"
         write_json(
             fanout_dir(root, job_id) / "fanout_run_report.json",
             report,
@@ -913,6 +1031,8 @@ def main():
             print(json.dumps(report, ensure_ascii=False, indent=2))
         else:
             print(report["overall"])
+        if report["overall"] == "STOP":
+            sys.exit(STOP_EXIT_CODE)
         if report["overall"] != "PASS":
             sys.exit(1)
 

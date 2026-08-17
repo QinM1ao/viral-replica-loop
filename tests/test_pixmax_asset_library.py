@@ -1,4 +1,6 @@
 import sys
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -58,6 +60,41 @@ class PixmaxAssetLibraryTest(unittest.TestCase):
             result = pixmax.inspect_source_geometry([source])
             self.assertEqual(result[0]["matched_aspect"], "3:4")
             self.assertEqual(result[0]["status"], "PASS")
+
+    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "ffmpeg/ffprobe required")
+    def test_accepts_24fps_audio_free_depth_video(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            video = Path(tmp) / "depth.mp4"
+            subprocess.run(
+                [
+                    "ffmpeg", "-y", "-f", "lavfi", "-i", "color=black:s=180x320:r=24",
+                    "-t", "0.5", "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(video),
+                ],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            report = pixmax.probe_source_video(video, require_no_audio=True)
+            self.assertEqual(report["status"], "PASS")
+            self.assertEqual(report["fps"], 24.0)
+            self.assertEqual(report["audio_stream_count"], 0)
+
+    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "ffmpeg/ffprobe required")
+    def test_rejects_20fps_depth_video_before_pixmax(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            video = Path(tmp) / "depth20.mp4"
+            subprocess.run(
+                [
+                    "ffmpeg", "-y", "-f", "lavfi", "-i", "color=black:s=180x320:r=20",
+                    "-t", "0.5", "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(video),
+                ],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            report = pixmax.probe_source_video(video, require_no_audio=True)
+            self.assertEqual(report["status"], "FAIL")
+            self.assertIn("fps must be", report["reason"])
 
 
 if __name__ == "__main__":

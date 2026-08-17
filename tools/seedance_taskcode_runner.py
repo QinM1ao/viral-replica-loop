@@ -15,8 +15,12 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from seedance_request_contract import (
+    SEEDANCE25_MAX_DURATION_SECONDS,
+    SEEDANCE25_MODEL,
+    decode_taskcode_param,
     inspect_taskcode_request,
     reference_audio_urls,
+    reference_visual_urls,
 )
 
 try:
@@ -26,12 +30,7 @@ except ImportError:
     import httpx
 
 
-SEEDANCE_CONFIG = Path(
-    os.environ.get(
-        "SEEDANCE_CONFIG_PATH",
-        str(Path.home() / ".codex" / "skills" / "seedance" / "config" / "default.json"),
-    )
-).expanduser()
+SEEDANCE_CONFIG = Path("<client-owned-seedance-config>")
 
 
 def load_gateway_key() -> str:
@@ -179,6 +178,12 @@ def probe_audio_file(path: Path) -> dict:
 
 
 def validate_reference_audio_urls(request: dict, client) -> list[dict]:
+    _body, param = decode_taskcode_param(request)
+    max_duration = (
+        SEEDANCE25_MAX_DURATION_SECONDS
+        if param.get("model") == SEEDANCE25_MODEL
+        else 15.0
+    )
     reports = []
     with tempfile.TemporaryDirectory(prefix="seedance-audio-preflight-") as directory:
         temp_dir = Path(directory)
@@ -193,9 +198,9 @@ def validate_reference_audio_urls(request: dict, client) -> list[dict]:
             local_path.write_bytes(payload)
             probe = probe_audio_file(local_path)
             duration = float(probe.get("duration") or 0)
-            if duration <= 0 or duration > 15.0:
+            if duration <= 0 or duration > max_duration:
                 raise ValueError(
-                    f"reference audio {index} must be 0–15.00 seconds, "
+                    f"reference audio {index} must be 0–{max_duration:.2f} seconds, "
                     f"found {duration:.3f}: {url}"
                 )
             reports.append(
@@ -223,6 +228,92 @@ def validate_existing_preflight(path: Path, request_sha256: str) -> dict:
     return report
 
 
+def validate_source_fidelity_qc(request: dict, path: Path) -> dict:
+    if not path.is_file():
+        raise ValueError(f"source fidelity QC is missing: {path}")
+    payload = path.read_bytes()
+    report = json.loads(payload.decode("utf-8"))
+    if report.get("overall") != "PASS":
+        raise ValueError(f"source fidelity QC is not PASS: {path}")
+    actual_hash = hashlib.sha256(payload).hexdigest()
+    if request.get("source_fidelity_qc_sha256") != actual_hash:
+        raise ValueError(
+            "source fidelity QC hash does not match the prepared request: "
+            f"request={request.get('source_fidelity_qc_sha256')!r}, actual={actual_hash}"
+        )
+    _body, param = decode_taskcode_param(request)
+    prompt = next(
+        (
+            item.get("text", "")
+            for item in param.get("content") or []
+            if isinstance(item, dict) and item.get("type") == "text"
+        ),
+        "",
+    )
+    prompt_hash = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+    if report.get("prompt_sha256") != prompt_hash:
+        raise ValueError("source fidelity QC prompt hash does not match the submitted prompt")
+    expected_transcript = str(report.get("expected_transcript") or "")
+    transcript_hash = hashlib.sha256(expected_transcript.encode("utf-8")).hexdigest()
+    if not expected_transcript or request.get("expected_transcript_sha256") != transcript_hash:
+        raise ValueError("source fidelity QC expected transcript is missing or unbound")
+    return {
+        "overall": "PASS",
+        "qc_path": str(path),
+        "qc_sha256": actual_hash,
+        "source_rhythm_sha256": report.get("source_rhythm_sha256"),
+        "prompt_sha256": prompt_hash,
+        "expected_transcript_sha256": transcript_hash,
+    }
+
+
+def default_active_asset_manifest_path(request_path: Path) -> Path:
+    suffix = "_request_prepared.json"
+    if not request_path.name.endswith(suffix):
+        return request_path.with_name(f"{request_path.stem}_asset_binding.json")
+    part_id = request_path.name[: -len(suffix)]
+    return request_path.with_name(f"{part_id}_asset_binding.json")
+
+
+def validate_active_asset_manifest(request: dict, manifest_path: Path) -> dict:
+    if not manifest_path.is_file():
+        raise ValueError(f"Active visual asset manifest is missing: {manifest_path}")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    items = manifest.get("visual_assets")
+    if not isinstance(items, list) or not items:
+        raise ValueError(
+            "Active visual asset manifest must contain a non-empty visual_assets list"
+        )
+    inactive = [
+        item
+        for item in items
+        if not isinstance(item, dict) or item.get("status") != "Active"
+    ]
+    if inactive:
+        raise ValueError("Every visual asset manifest item must have Status=Active")
+    manifest_refs = [item.get("asset_ref") for item in items]
+    request_refs = reference_visual_urls(request)
+    if sorted(manifest_refs) != sorted(request_refs):
+        raise ValueError(
+            "Request visual refs must exactly match the Active asset manifest; "
+            f"request={request_refs!r}, manifest={manifest_refs!r}"
+        )
+    return {
+        "overall": "PASS",
+        "manifest_path": str(manifest_path),
+        "visual_count": len(request_refs),
+        "visual_refs": request_refs,
+    }
+
+
+def prior_submission_evidence(out_dir: Path) -> list[Path]:
+    return [
+        path
+        for path in (out_dir / "create_response.json", out_dir / "task_key.txt")
+        if path.exists()
+    ]
+
+
 def download(client: httpx.Client, url: str, output: Path) -> None:
     with client.stream("GET", url, timeout=180) as response:
         response.raise_for_status()
@@ -237,6 +328,8 @@ def main() -> int:
     parser.add_argument("--request", required=True, type=Path)
     parser.add_argument("--out-dir", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--active-asset-manifest", type=Path)
+    parser.add_argument("--source-fidelity-qc", type=Path)
     parser.add_argument("--poll-interval", type=float, default=10)
     parser.add_argument("--max-wait", type=int, default=5400)
     preflight_group = parser.add_mutually_exclusive_group()
@@ -260,10 +353,17 @@ def main() -> int:
     summary_path = args.out_dir / "summary.json"
     ffprobe_path = args.out_dir / "ffprobe.json"
     audio_preflight_path = args.out_dir / "reference_audio_preflight.json"
+    active_asset_preflight_path = args.out_dir / "active_visual_asset_preflight.json"
+    source_fidelity_preflight_path = args.out_dir / "source_fidelity_preflight.json"
     cover_path = args.out_dir / "cover_last_frame.jpg"
     request_copy.write_bytes(request_source_bytes)
 
-    request_contract = inspect_taskcode_request(request, for_submission=True)
+    request_contract = inspect_taskcode_request(
+        request,
+        for_submission=True,
+        require_active_visual_assets=True,
+        require_seedance_prompt_format=True,
+    )
     request_contract["request_path"] = str(request_copy)
     request_contract["request_sha256"] = hashlib.sha256(
         request_copy.read_bytes()
@@ -279,6 +379,55 @@ def main() -> int:
             flush=True,
         )
         return 2
+
+    _body, request_param = decode_taskcode_param(request)
+    if request_param.get("model") == SEEDANCE25_MODEL:
+        try:
+            if args.source_fidelity_qc is None:
+                raise ValueError("Seedance 2.5 requires --source-fidelity-qc")
+            fidelity_report = validate_source_fidelity_qc(request, args.source_fidelity_qc)
+        except Exception as exc:
+            fidelity_report = {
+                "overall": "FAIL",
+                "qc_path": str(args.source_fidelity_qc or ""),
+                "error": str(exc),
+            }
+            source_fidelity_preflight_path.write_text(
+                json.dumps(fidelity_report, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            print(f"Source fidelity preflight failed: {exc}", file=sys.stderr, flush=True)
+            return 2
+        source_fidelity_preflight_path.write_text(
+            json.dumps(fidelity_report, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+    active_asset_manifest_path = (
+        args.active_asset_manifest
+        or default_active_asset_manifest_path(args.request)
+    )
+    try:
+        active_asset_report = validate_active_asset_manifest(
+            request,
+            active_asset_manifest_path,
+        )
+    except Exception as exc:
+        active_asset_report = {
+            "overall": "FAIL",
+            "manifest_path": str(active_asset_manifest_path),
+            "error": str(exc),
+        }
+        active_asset_preflight_path.write_text(
+            json.dumps(active_asset_report, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        print(f"Active visual asset preflight failed: {exc}", file=sys.stderr, flush=True)
+        return 2
+    active_asset_preflight_path.write_text(
+        json.dumps(active_asset_report, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
     url = request["url"]
     body = request["body"]
@@ -340,6 +489,15 @@ def main() -> int:
                 flush=True,
             )
             return 0
+        prior_submission_files = prior_submission_evidence(args.out_dir)
+        if prior_submission_files:
+            print(
+                "Refusing duplicate Seedance task_create; prior submission evidence exists: "
+                + ", ".join(str(path) for path in prior_submission_files),
+                file=sys.stderr,
+                flush=True,
+            )
+            return 2
         print(f"Creating Seedance task from {args.request}", flush=True)
         create_response = client.post(url, json=body, headers=headers)
         create_response_path.write_text(create_response.text, encoding="utf-8")
@@ -402,6 +560,8 @@ def main() -> int:
             cover_ok = extract_last_frame(args.output, cover_path)
             streams = probe.get("streams") or []
             summary = {
+                "model_family": request.get("model_family") or "",
+                "model": decode_taskcode_param(request)[1].get("model") or "",
                 "request_source": str(args.request),
                 "request": str(request_copy),
                 "request_contract": str(request_contract_path),

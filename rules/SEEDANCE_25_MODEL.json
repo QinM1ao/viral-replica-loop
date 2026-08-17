@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "model_family": "Seedance 2.5",
+  "model": "doubao-seedance-2-5-260628",
+  "task_code": 2509,
+  "task_create_url": "https://higress-api.wujieai.com/wj-open/v2/open-platform/task/task_create",
+  "task_info_url": "https://higress-api.wujieai.com/wj-open/v2/open-platform/task/v2/task_info",
+  "pixmax_project_name": "tianwenyue-2",
+  "duration_seconds": {
+    "minimum": 4,
+    "maximum": 30
+  },
+  "defaults": {
+    "audio_mode": "generated_voiceover",
+    "generate_audio": true,
+    "depth_reference_enabled": false,
+    "ratio": "9:16",
+    "resolution": "720p",
+    "watermark": false,
+    "omni_reference_task_type": "reference"
+  },
+  "reference_route": {
+    "content_order": ["text", "images", "optional_depth_video", "optional_audio"],
+    "visual_transport": "pixmax_active_asset",
+    "audio_transport": "public_http_mp3",
+    "depth_video_required": false,
+    "depth_video_audio_streams": 0,
+    "minimum_depth_video_fps": 23.8
+  },
+  "submission_policy": "exactly_one_create_request_no_retry"
+}

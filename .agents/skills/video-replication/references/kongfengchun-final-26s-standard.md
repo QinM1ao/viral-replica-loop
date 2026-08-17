@@ -15,7 +15,7 @@
 
 ## 完整流程
 
-1. **看懂原片**：Seed 2.0 Mini 判断语义动作，Qwen ASR 锁原话，ffmpeg 切点与 5fps 证据帧锁时间和物理动作。三者合成 schema-v3 `source_rhythm.json`；模型结论与像素/ASR 冲突时，以直接证据为准。
+1. **看懂原片**：Seed 2.0 Mini 判断语义动作，ElevenLabs Scribe v1 锁原始语音、说话人与词级时间戳，ffmpeg 切点与 5fps 证据帧锁视觉时间和物理动作。三者合成 schema-v3 `source_rhythm.json`；模型结论与像素/ASR 冲突时，以直接证据为准。
 2. **改好分镜**：根据 `source_rhythm.json` 选择动作峰值，制作每 Part 的 12 格源分镜；GPT Image 只换当前人物、产品、材质和必要产品动作，保留原场景、景别、顺序、动作、画布与 `Shot 01–12` 编号。
 3. **审图**：检查人物性别和身份、产品包装文字、白色厚泥、洗前/洗后顺序、场景、网格几何和 Shot 编号。只有当前 job 的真实 AI 改好分镜图可以进入 Seedance。
 4. **写导演计划**：从 `source_rhythm.json`、ASR、分镜和产品 profile 生成一份 `director_plan.json`；先确定说话容量和台词落点，再按场景、画面功能、声音模式拆 `execution_blocks`。每个 Part 都是独立任务。

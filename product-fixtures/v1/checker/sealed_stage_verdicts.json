@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "fixture_id": "PF-05 sealed-independent-checker-verdicts",
+  "reviewer": "independent_product_fixture_checker",
+  "non_client": true,
+  "stages": {
+    "source_blueprint": {
+      "production_families": {
+        "source_fidelity": {
+          "result": "PASS",
+          "fingerprint_sha256": "84e5ad7b61bd1d2ac6924be7439ffb25d3fe3d6c1e6ace52a6186a6074d7c9d5",
+          "reason": "The sealed source blueprint preserves the exact fixture source, semantic analysis, rhythm, and Part coverage."
+        }
+      },
+      "source_rhythm_visual_review": {
+        "beats": {
+        "B01": {
+          "reason": "The opening beat matches the sealed source evidence.",
+          "evidence_sha256": ["d695c33d94f139d02bda2130d08311e237e8f07a3b5ef4d782f346a2cd0d5f45", "a6053c23549ddd5948fa0ad85e438db07ff6182e01227b11c7a0f2fcef9f99af", "50cf0171127bff1bef9d343cfecc561884a9fad726c349c25d4cf031acaa5a26"]
+        },
+        "B02": {
+          "reason": "The reveal beat matches the sealed source evidence.",
+          "evidence_sha256": ["50cf0171127bff1bef9d343cfecc561884a9fad726c349c25d4cf031acaa5a26", "80ce041110269a70611b0ec80c67886e89b09ac9948c6828a97e7fdcc87457e0", "3c6ca122d0afb263390ea2c108a50c29fd7e130f013814b3c78aa87551056bf7"]
+        },
+        "B03": {
+          "reason": "The product hold beat matches the sealed source evidence.",
+          "evidence_sha256": ["b768c72bb43696ee28240003bb22c0240134e6b7a5aca9ab1902867d3e4734aa", "04c0fb93315d6ef7a208c33d2c869be73e51eb68fb6baf5134516c7667a2809e", "548b9e37b20d206c4e7a3d14b9aa993fb3034ed146c9a844d08e5f03d683ef6b"]
+        },
+        "B04": {
+          "reason": "The texture proof beat matches the sealed source evidence.",
+          "evidence_sha256": ["548b9e37b20d206c4e7a3d14b9aa993fb3034ed146c9a844d08e5f03d683ef6b", "cdae6cddbc5497ac871ba88f235159b0845e81883ce696e9a5f708e328447323", "366663e30d245c059a87319ab0482507eb73b471d88ca3c58566f44535357529"]
+        },
+        "B05": {
+          "reason": "The wipe entry beat matches the sealed source evidence.",
+          "evidence_sha256": ["366663e30d245c059a87319ab0482507eb73b471d88ca3c58566f44535357529", "1a441952448f3ef33604e2a20afc0a64b1a5b1894af34c991271b811095c038a", "f4b9e881ab8fac5e854941c11acbe4afc9ce08a48a1cf2ad3ce310b43bb063cb"]
+        },
+        "B06": {
+          "reason": "The wipe result beat matches the sealed source evidence.",
+          "evidence_sha256": ["f4b9e881ab8fac5e854941c11acbe4afc9ce08a48a1cf2ad3ce310b43bb063cb", "eb874c98e72e16c8bc2c6a420b176c753524b11b3aba23a796b17d39deb1e073", "c215ee9b47093d0093987edf72e3d95040447b36a36886a32840a77ab77406a9"]
+        }
+        }
+      }
+    },
+    "image_batch_qc": {
+      "production_families": {
+        "geometry_appearance": {
+          "result": "PASS",
+          "fingerprint_sha256": "eecbba39728a9fe000321f37f0cd6819cc6817bd9090762c100a9c2bdd7e4035",
+          "reason": "The sealed current-job board preserves the fixture grid, framing, and shot order."
+        },
+        "identity_product_material_integrity": {
+          "result": "PASS",
+          "fingerprint_sha256": "e39f1d7d126387cd71645d277e07a9cae926d7fa0fea293f12523f53c2d27916",
+          "reason": "The sealed current-job board uses only the sealed identity and product references."
+        }
+      }
+    },
+    "pre_seedance_pack": {
+      "production_families": {
+        "source_to_generation_fidelity": {
+          "result": "PASS",
+          "fingerprint_sha256": "c5635f7d53664ac710fe88b493c7a907fe3025e70cc52aeff09fcc6059585cf2",
+          "reason": "The rendered plan, script, prompt, and request preserve the sealed source wording and ordered beats."
+        }
+      }
+    }
+  },
+  "subtitle_classification": {
+    "clean": {
+      "input": "finalization/subtitle-clean.mp4",
+      "input_sha256": "bfb913604208ba1749d9f34bb1c1ada793cdc33811780f3aeb97bcdf95ea1b82",
+      "result": "clean",
+      "reason": "The sealed clean fixture has no burned-in text region."
+    },
+    "burned_in": {
+      "input": "finalization/subtitle-burned-in.mp4",
+      "input_sha256": "5f26e59f2312fa9abbaf059ba06a276bb11ebd65ee79ad44733c530996870d52",
+      "result": "burned_in",
+      "reason": "The sealed burned-in fixture contains a persistent two-line subtitle-shaped glyph overlay."
+    }
+  }
+}

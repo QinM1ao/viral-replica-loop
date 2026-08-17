@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "finishing": {
+    "ordered_inputs": [
+      "finalization/part-01.mp4",
+      "finalization/part-02.mp4"
+    ],
+    "output": "output/job-001/final/final_video.mp4",
+    "caption_policy": "caption-free",
+    "expected_frames": 23
+  },
+  "final_technical_qc": {
+    "input": "finalization/final-master.mp4",
+    "required_streams": [
+      "video",
+      "audio"
+    ],
+    "expected_readable": true,
+    "expected_frames": 24,
+    "expected_duration_seconds": 2.0,
+    "expected_conclusion": "PASS"
+  }
+}

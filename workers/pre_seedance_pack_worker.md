@@ -14,6 +14,7 @@ This replaces the old default chain of separate `voiceover -> seam -> seedance_p
 
 - Passed story analysis with ASR/subtitle/visual shot table.
 - Passed schema-v3 `source_rhythm.json` containing evidence-confirmed source lines plus source scene, camera, framing, action type/timing, and transitions.
+- When present, `剧情分析/face_expression/face_expression_timeline.json` from the same source hash; this is the reusable native-fps eye/expression evidence.
 - Passed storyboard and approved final Part images.
 - `output/<job-id>/visual-assets/approved_visual_manifest.json`.
 - The current role map and identity-group `presenter_gender`; source, target, identity, director plan, voice labels, and final Prompt must all agree.
@@ -38,6 +39,7 @@ This replaces the old default chain of separate `voiceover -> seam -> seedance_p
 2. Write or refresh one compact generation package:
    - first write `output/<job-id>/seedance/director_plan.json` as the only authored target plan for downstream timing, actions, speaker modes, lines, reference bindings, shot groups, and seam state; new plans use `version >= 6`, `script_fidelity.mode=source_locked`, and `replication_fidelity.change_policy=necessary_only`
    - `剧情分析/source_rhythm.json` is required; in `source_length` mode every target beat binds exactly one source beat, while only `execution_blocks` may group adjacent target beats
+   - load the hash-bound face-expression timeline once and map its eye-state events into the source beats whose time ranges contain them; copy only visible, evidence-backed nodes into `target_visual_action`. Do not call video understanding again for gaze, eyelid, or blink details during prompt repair
    - first build `source_functions` from complete ASR, subtitles, and visual rhythm; mark each function must_keep / mergeable / removable and bind preserved functions to target beats or speech groups
    - keep `beats` and `speech_groups` separate internally: every visual beat remains explicit, while one speech group may cover several consecutive beats with the same source speaker mode
    - author `execution_blocks` separately: a block cannot cross a scene, visual-function, or speaker-mode boundary; in-frame sync speech and narration must be separate, and short still-life B-roll gets its own block

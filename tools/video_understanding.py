@@ -21,7 +21,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = REPO_ROOT / "rules" / "VIDEO_UNDERSTANDING_MODEL.json"
 DEFAULT_ENV_FILE = Path.home() / ".config" / "wujieai" / "env"
 KEY_NAMES = ("HIGRESS_API_KEY", "WUJIEAI_API_KEY", "GATEWAY_API_KEY")
-PROMPT_VERSION = "viral-replica-source-video-v1"
+PROMPT_VERSION = "viral-replica-source-video-v2-expression-budget"
 RAPID_HOOK_PROMPT_VERSION = "viral-replica-rapid-hook-v1"
 
 ANALYSIS_PROMPT = """你是爆款视频复刻项目的原片理解器。请逐段理解整个视频，同时分析画面、声音、字幕和叙事功能。
@@ -30,12 +30,15 @@ ANALYSIS_PROMPT = """你是爆款视频复刻项目的原片理解器。请逐�
 {
   "summary": "一句话概括原片",
   "story_structure": ["按顺序列出剧情/销售结构"],
+  "people_mode": "single_primary|multi_person|no_person|uncertain",
   "timeline": [
     {
       "start_seconds": 0.0,
       "end_seconds": 1.2,
       "shot_type": "景别和镜头运动",
       "visual_action": "画面中实际发生的动作和可见状态变化",
+      "visible_roles": ["当前画面实际可见的人物剧情角色"],
+      "expression_and_gaze": "简短描述可见的常规表情、注视对象或视线变化；没有则为空字符串",
       "spoken_content": "该段听到的原话；无则为空字符串",
       "speaker_mode": "in_frame_sync|voiceover|dialogue|music_only|silent|uncertain",
       "visible_text": ["字幕、花字、产品包装文字；无则空数组"],
@@ -56,7 +59,9 @@ ANALYSIS_PROMPT = """你是爆款视频复刻项目的原片理解器。请逐�
 1. timeline 覆盖从开头到结尾，按时间排序，尽量在硬切、说话人或动作功能变化处拆段。
 2. 只写视频中实际可见或可听的内容，不脑补产品名称、台词和动作。
 3. 口播与画外音必须区分；看不准写 uncertain。
-4. confidence 是 0 到 1 的数字。"""
+4. confidence 是 0 到 1 的数字。
+5. expression_and_gaze 只写能改善人物呆板感的可见表情或视线，不逐次统计眨眼；多人镜头不写眨眼次数。
+6. 这是全片唯一一次语义表情理解，后续步骤直接复用本结果。"""
 
 RAPID_HOOK_PROMPT = """你是爆款视频复刻项目的快速动作复核器。这里只分析给定短片内真实可见的连续动作，不从静止帧猜动作。
 
@@ -334,6 +339,28 @@ def validate_analysis(analysis):
     return analysis
 
 
+def validate_full_analysis(analysis):
+    validate_analysis(analysis)
+    people_mode = str(analysis.get("people_mode") or "").strip()
+    if people_mode not in {
+        "single_primary",
+        "multi_person",
+        "no_person",
+        "uncertain",
+    }:
+        raise ValueError("model JSON output has invalid or missing people_mode")
+    for index, item in enumerate(analysis["timeline"]):
+        if not isinstance(item.get("visible_roles"), list):
+            raise ValueError(
+                f"model timeline[{index}] is missing visible_roles"
+            )
+        if not isinstance(item.get("expression_and_gaze"), str):
+            raise ValueError(
+                f"model timeline[{index}] is missing expression_and_gaze"
+            )
+    return analysis
+
+
 def validate_rapid_hook_analysis(analysis):
     validate_analysis(analysis)
     required_evidence = {
@@ -370,7 +397,17 @@ def call_gateway(payload, config, api_key, client=None):
                 time.sleep(attempt + 1)
                 continue
             if response.status_code < 400:
-                return response.json(), response.status_code, url
+                try:
+                    response_json = response.json()
+                    content = response_content(response_json)
+                except ValueError:
+                    content = ""
+                if content.strip():
+                    return response_json, response.status_code, url
+                if attempt == 1:
+                    raise RuntimeError("Higress returned empty content after retry")
+                time.sleep(attempt + 1)
+                continue
             if response.status_code not in {429, 500, 502, 503, 504} or attempt == 1:
                 raise RuntimeError(f"Higress HTTP {response.status_code}: {response.text[:1000]}")
             time.sleep(attempt + 1)
@@ -388,6 +425,7 @@ def render_markdown(result):
         f"- Model: `{result['model']}`",
         f"- Source SHA-256: `{result['source_sha256']}`",
         f"- Summary: {analysis.get('summary', '')}",
+        f"- People mode: `{analysis.get('people_mode', '')}`",
         "",
         "## Story Structure",
         "",
@@ -398,7 +436,7 @@ def render_markdown(result):
         lines.append(
             f"- {item.get('start_seconds', '?')}–{item.get('end_seconds', '?')}s | "
             f"{item.get('speaker_mode', '')} | {item.get('visual_action', '')} | "
-            f"{item.get('spoken_content', '')}"
+            f"{item.get('expression_and_gaze', '')} | {item.get('spoken_content', '')}"
         )
     lines.extend(["", "## Uncertainties", ""])
     lines.extend(f"- {item}" for item in analysis.get("uncertainties") or [])
@@ -463,7 +501,7 @@ def understand_video(
         analysis = (
             validate_rapid_hook_analysis(analysis)
             if mode == "rapid_hook"
-            else validate_analysis(analysis)
+            else validate_full_analysis(analysis)
         )
         submitted_sha256 = sha256_file(submitted)
         submitted_size = submitted.stat().st_size

@@ -7,11 +7,13 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "tools" / "pre_seedance_pack.py"
 sys.path.insert(0, str(REPO_ROOT / "tools"))
+import pre_seedance_pack
 
 LOCKED_VISUAL_DIMENSIONS = [
     "shot_order",
@@ -130,6 +132,27 @@ class PreSeedancePackTest(unittest.TestCase):
                 "source_sha256": "fixture-source-video",
                 "duration": 30.0,
                 "beats": [],
+            },
+        )
+        self._write_json(
+            self.job_dir / "剧情分析" / "expression_prompt_profile.json",
+            {
+                "schema_version": 1,
+                "source_sha256": "fixture-source-video",
+                "mode": "single_person_budgeted",
+                "people_mode": "single_primary",
+                "blink_policy": "budgeted",
+                "budget": {
+                    "max_chars_per_shot": 36,
+                    "max_clauses_per_shot": 3,
+                    "max_blink_phrases_per_cue": 1,
+                },
+                "natural_blink_fallback": {
+                    "eligible": True,
+                    "face_detection_coverage": 1.0,
+                    "reliable_blink_event_count": 0,
+                },
+                "semantic_timeline": [],
             },
         )
         self._write_json(
@@ -421,6 +444,14 @@ class PreSeedancePackTest(unittest.TestCase):
                 "beats": [],
             },
         )
+        expression_path = (
+            self.job_dir / "剧情分析" / "expression_prompt_profile.json"
+        )
+        expression_profile = json.loads(
+            expression_path.read_text(encoding="utf-8")
+        )
+        expression_profile["source_sha256"] = "source-video-hash"
+        self._write_json(expression_path, expression_profile)
 
         self.run_pack("init")
 
@@ -455,6 +486,207 @@ class PreSeedancePackTest(unittest.TestCase):
                 "source_video_sha256": "source-video-hash",
             },
         )
+
+    def test_init_binds_reusable_face_expression_timeline(self):
+        timeline_path = (
+            self.job_dir
+            / "剧情分析"
+            / "face_expression"
+            / "face_expression_timeline.json"
+        )
+        self._write_json(
+            timeline_path,
+            {
+                "schema_version": 1,
+                "source_sha256": "fixture-source-video",
+                "eye_events": [],
+                "frames": [],
+            },
+        )
+
+        self.run_pack("init")
+
+        plan = json.loads(
+            (self.job_dir / "seedance" / "director_plan.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            plan["face_expression"],
+            {
+                "path": (
+                    "output/job-001/剧情分析/face_expression/"
+                    "face_expression_timeline.json"
+                ),
+                "analysis_sha256": hashlib.sha256(
+                    timeline_path.read_bytes()
+                ).hexdigest(),
+                "source_video_sha256": "fixture-source-video",
+            },
+        )
+
+    def test_init_binds_expression_prompt_profile(self):
+        profile_path = (
+            self.job_dir / "剧情分析" / "expression_prompt_profile.json"
+        )
+
+        self.run_pack("init")
+
+        plan = json.loads(
+            (self.job_dir / "seedance" / "director_plan.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            plan["expression_prompt"]["path"],
+            "output/job-001/剧情分析/expression_prompt_profile.json",
+        )
+        self.assertEqual(
+            plan["expression_prompt"]["analysis_sha256"],
+            hashlib.sha256(profile_path.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(
+            plan["expression_prompt"]["budget"]["max_chars_per_shot"],
+            36,
+        )
+
+    def test_render_enforces_single_person_expression_budget_and_merges_cue_into_visual(self):
+        self.run_pack("init")
+        plan_path = self._fill_plan(mode="api")
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        plan["parts"][0]["beats"][0]["expression_cue"] = (
+            "第一帧双眼闭合，随即睁开；喷雾经过时自然眨眼，喷完保持睁眼"
+        )
+        plan["parts"][0]["beats"][0]["expression_cue_source"] = (
+            "face_expression:event_0"
+        )
+        self._write_json(plan_path, plan)
+
+        self.run_pack("render")
+
+        prompt = (
+            self.job_dir / "seedance" / "seedance_part1_prompt.txt"
+        ).read_text(encoding="utf-8")
+        self.assertIn("喷雾经过时自然眨眼", prompt)
+        self.assertNotIn("表情：", prompt)
+
+        plan["parts"][0]["beats"][0]["expression_cue"] = "过长表情" * 10
+        self._write_json(plan_path, plan)
+        result = self.run_pack("render", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("expression_cue exceeds", result.stderr)
+
+    def test_render_allows_more_than_three_source_supported_cues_in_one_part(self):
+        self.run_pack("init")
+        plan_path = self._fill_plan(mode="api")
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        cues = [
+            "喷雾靠近时快速连续眨眼",
+            "睁眼后目光自然回到产品",
+            "说话时眉眼放松",
+            "展示结果时轻微微笑",
+        ]
+        for index, cue in enumerate(cues):
+            plan["parts"][0]["beats"][index]["expression_cue"] = cue
+            plan["parts"][0]["beats"][index]["expression_cue_source"] = (
+                f"video_understanding:timeline_{index}"
+            )
+        self._write_json(plan_path, plan)
+
+        self.run_pack("render")
+
+        prompt = (
+            self.job_dir / "seedance" / "seedance_part1_prompt.txt"
+        ).read_text(encoding="utf-8")
+        for cue in cues:
+            self.assertIn(cue, prompt)
+
+    def test_render_rejects_expression_cue_without_source_evidence(self):
+        self.run_pack("init")
+        plan_path = self._fill_plan(mode="api")
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        plan["parts"][0]["beats"][0]["expression_cue"] = "自然看向产品"
+        self._write_json(plan_path, plan)
+
+        result = self.run_pack("render", check=False)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("expression_cue requires source evidence", result.stderr)
+
+    def test_render_accepts_no_blink_fallback_bound_to_current_beat(self):
+        self.run_pack("init")
+        plan_path = self._fill_plan(mode="api")
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        beat = plan["parts"][0]["beats"][3]
+        beat["expression_cue"] = "面颊回弹时自然眨眼一次"
+        beat["expression_cue_source"] = (
+            f"natural_blink_fallback:{beat['id']}"
+        )
+        self._write_json(plan_path, plan)
+
+        self.run_pack("render")
+
+        prompt = (
+            self.job_dir / "seedance" / "seedance_part1_prompt.txt"
+        ).read_text(encoding="utf-8")
+        self.assertIn("面颊回弹时自然眨眼一次", prompt)
+
+    def test_render_rejects_tampered_no_blink_fallback_binding(self):
+        self.run_pack("init")
+        plan_path = self._fill_plan(mode="api")
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        plan["expression_prompt"]["natural_blink_fallback"]["eligible"] = False
+        beat = plan["parts"][0]["beats"][3]
+        beat["expression_cue"] = "面颊回弹时自然眨眼一次"
+        beat["expression_cue_source"] = (
+            f"natural_blink_fallback:{beat['id']}"
+        )
+        self._write_json(plan_path, plan)
+
+        result = self.run_pack("render", check=False)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "expression_prompt binding does not match profile",
+            result.stderr,
+        )
+
+    def test_render_multi_person_reuses_semantic_expression_without_blink_cues(self):
+        self.run_pack("init")
+        plan_path = self._fill_plan(mode="api")
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        plan["expression_prompt"]["mode"] = "multi_person_semantic"
+        plan["expression_prompt"]["people_mode"] = "multi_person"
+        plan["expression_prompt"]["blink_policy"] = "omit"
+        plan["expression_prompt"]["budget"] = {
+            "max_chars_per_shot": 24,
+            "max_clauses_per_shot": 2,
+            "blink_policy": "omit",
+        }
+        plan["expression_prompt"]["natural_blink_fallback"] = None
+        profile_path = (
+            self.job_dir / "剧情分析" / "expression_prompt_profile.json"
+        )
+        profile = json.loads(profile_path.read_text(encoding="utf-8"))
+        profile["mode"] = "multi_person_semantic"
+        profile["people_mode"] = "multi_person"
+        profile["blink_policy"] = "omit"
+        profile["budget"] = dict(plan["expression_prompt"]["budget"])
+        profile["natural_blink_fallback"] = None
+        self._write_json(profile_path, profile)
+        plan["expression_prompt"]["analysis_sha256"] = hashlib.sha256(
+            profile_path.read_bytes()
+        ).hexdigest()
+        plan["parts"][0]["beats"][0]["expression_cue"] = "两人对视后自然眨眼"
+        plan["parts"][0]["beats"][0]["expression_cue_source"] = (
+            "video_understanding:timeline_0"
+        )
+        self._write_json(plan_path, plan)
+
+        result = self.run_pack("render", check=False)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("multi-person expression_cue must omit blink", result.stderr)
 
     def test_init_requires_current_source_rhythm_for_new_flow(self):
         (self.job_dir / "剧情分析" / "source_rhythm.json").unlink()
@@ -1504,6 +1736,201 @@ class PreSeedancePackTest(unittest.TestCase):
         self.assertNotIn("音效：无", prompt)
         self.assertNotIn("音效：", prompt)
 
+    def test_render_deduplicates_sound_effects_inside_one_execution_block(self):
+        self.run_pack("init")
+        plan_path = self._fill_plan(mode="api")
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        first_block = plan["parts"][0]["execution_blocks"][0]
+        beats = {
+            beat["id"]: beat for beat in plan["parts"][0]["beats"]
+        }
+        for beat_id in first_block["beat_ids"]:
+            beats[beat_id]["sound_effect"] = "清透水流落入掌心声"
+        self._write_json(plan_path, plan)
+
+        self.run_pack("render")
+
+        prompt = (
+            self.job_dir / "seedance" / "seedance_part1_prompt.txt"
+        ).read_text(encoding="utf-8")
+        self.assertEqual(prompt.count("清透水流落入掌心声"), 1)
+
+    def test_unchanged_depth_reference_is_reused_during_other_replacements(self):
+        source = self.root / "source.mp4"
+        output = self.job_dir / "depth-reference" / "part1_depth_reference.mp4"
+        evidence = self.job_dir / "depth-reference" / "part1_depth_reference.json"
+        source.write_bytes(b"source")
+        output.parent.mkdir(parents=True)
+        output.write_bytes(b"depth")
+        self._write_json(
+            evidence,
+            {
+                "overall": "PASS",
+                "source_sha256": hashlib.sha256(b"source").hexdigest(),
+                "source_interval": [0.0, 15.0],
+                "long_edge": pre_seedance_pack.DEPTH_LONG_EDGE,
+                "duration_seconds": 15.0,
+                "output_sha256": hashlib.sha256(b"depth").hexdigest(),
+            },
+        )
+        plan = {
+            "job": {"id": self.job_id},
+            "depth_reference": {
+                "enabled": True,
+                "source": "source.mp4",
+                "long_edge": pre_seedance_pack.DEPTH_LONG_EDGE,
+                "max_duration_seconds": 15.0,
+            },
+        }
+        parts = [
+            {
+                "id": "part1",
+                "duration_seconds": 15.0,
+                "beats": [{"source_start": 0.0, "source_end": 15.0}],
+            }
+        ]
+
+        with mock.patch.object(pre_seedance_pack, "build_depth_reference") as build:
+            outputs = pre_seedance_pack.prepare_depth_outputs(
+                self.root,
+                self.job_dir,
+                plan,
+                parts,
+            )
+
+        build.assert_not_called()
+        self.assertEqual(outputs, {"part1": output})
+        self.assertNotIn(
+            self.job_dir / "depth-reference",
+            pre_seedance_pack.managed_outputs(self.job_dir, parts),
+        )
+
+    def test_prompt_only_changes_one_block_and_syncs_web_copies(self):
+        self.run_pack("init")
+        self._fill_plan(mode="web")
+        self.run_pack("render")
+
+        before_part2 = (
+            self.job_dir / "seedance" / "seedance_part2_prompt.txt"
+        ).read_bytes()
+        before_images = {
+            path.relative_to(self.job_dir).as_posix(): path.read_bytes()
+            for path in (self.job_dir / "final-images").glob("*")
+        }
+        canonical_workspace = self.root / "jobs" / self.job_id / "work"
+        canonical_workspace.parent.mkdir(parents=True)
+        self.job_dir.rename(canonical_workspace)
+
+        result = subprocess.run(
+            [
+                "python3",
+                str(SCRIPT),
+                "prompt-only",
+                "--job-dir",
+                str(canonical_workspace),
+                "--part-id",
+                "part1",
+                "--block-id",
+                "block3",
+                "--visual",
+                "倒水动作完整结束后硬切",
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        prompt_paths = (
+            canonical_workspace / "seedance" / "seedance_part1_prompt.txt",
+            canonical_workspace
+            / "seedance_web_final"
+            / "prompts"
+            / "Part1_Seedance_prompt.txt",
+            canonical_workspace
+            / "seedance_web_final"
+            / "Part1_上传素材"
+            / "00_Part1_Seedance_prompt.txt",
+        )
+        rendered = [path.read_bytes() for path in prompt_paths]
+        self.assertEqual(rendered[0], rendered[1])
+        self.assertEqual(rendered[0], rendered[2])
+        self.assertIn("倒水动作完整结束后硬切", rendered[0].decode("utf-8"))
+        self.assertEqual(
+            before_part2,
+            (canonical_workspace / "seedance" / "seedance_part2_prompt.txt").read_bytes(),
+        )
+        self.assertEqual(
+            before_images,
+            {
+                path.relative_to(canonical_workspace).as_posix(): path.read_bytes()
+                for path in (canonical_workspace / "final-images").glob("*")
+            },
+        )
+        report = json.loads(
+            (
+                canonical_workspace
+                / "seedance"
+                / "prompt_patch_report.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(report["changed_parts"], ["part1"])
+        self.assertEqual(report["changed_blocks"], ["part1/block3"])
+        self.assertTrue(report["non_target_prompts_byte_identical"])
+
+        with mock.patch.object(pre_seedance_pack.subprocess, "run") as media_runner:
+            pre_seedance_pack.patch_prompt_only(
+                canonical_workspace,
+                "part1",
+                "block3",
+                "倒水动作完整结束，产品正面可见后硬切",
+            )
+        media_runner.assert_not_called()
+
+    def test_render_accepts_canonical_job_dir_without_output_job_symlink(self):
+        self.run_pack("init")
+        self._fill_plan(mode="web")
+        self.run_pack("render")
+        canonical = self.root / "jobs" / self.job_id / "work"
+        canonical.parent.mkdir(parents=True)
+        self.job_dir.rename(canonical)
+        self.assertFalse((self.root / "output" / self.job_id).exists())
+        (canonical / "voiceover" / "voiceover.md").write_text(
+            "tampered\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_pack(
+            "render",
+            "--job-dir",
+            str(canonical),
+            "--replace",
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotEqual(
+            (canonical / "voiceover" / "voiceover.md").read_text(
+                encoding="utf-8"
+            ),
+            "tampered\n",
+        )
+        self.assertFalse((self.root / "output" / self.job_id).exists())
+
+    def test_render_rejects_explicit_job_dir_outside_canonical_job(self):
+        result = self.run_pack(
+            "render",
+            "--job-dir",
+            str(self.root / "render-target"),
+            check=False,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "canonical --job-dir must be <root>/jobs/<job-id>/work",
+            result.stderr,
+        )
+
     def test_render_omits_legacy_afterwash_reference_from_every_part(self):
         afterwash = self.root / "output/shared/identity/afterwash.png"
         afterwash.write_bytes(b"afterwash")
@@ -1983,12 +2410,21 @@ class PreSeedancePackTest(unittest.TestCase):
         self.assertFalse((self.job_dir / "seedance" / "requests").exists())
         self.assertTrue((self.job_dir / "seedance_web_final" / "UPLOAD_ORDER.md").exists())
 
-    def test_existing_final_requires_replace_and_is_archived(self):
+    def test_existing_final_requires_replace_and_unchanged_rerun_reuses_current_pack(self):
         self.run_pack("init")
         self._fill_plan(mode="web")
         final_dir = self.job_dir / "seedance_web_final"
         final_dir.mkdir()
         (final_dir / "old.txt").write_text("old\n", encoding="utf-8")
+        legacy = (
+            self.job_dir
+            / "deprecated"
+            / "pre_seedance_pack_legacy"
+            / "seedance_web_final"
+            / "legacy.txt"
+        )
+        legacy.parent.mkdir(parents=True)
+        legacy.write_text("legacy\n", encoding="utf-8")
 
         refused = self.run_pack("render", check=False)
         self.assertNotEqual(refused.returncode, 0)
@@ -1996,9 +2432,68 @@ class PreSeedancePackTest(unittest.TestCase):
 
         self.run_pack("render", "--replace")
 
-        archived = list((self.job_dir / "deprecated").glob("*/seedance_web_final/old.txt"))
-        self.assertEqual(len(archived), 1)
+        rollback = (
+            self.root
+            / "output"
+            / ".history"
+            / self.job_id
+            / "rollback"
+            / "pre_seedance_pack"
+        )
+        self.assertEqual(
+            (rollback / "seedance_web_final" / "old.txt").read_text(encoding="utf-8"),
+            "old\n",
+        )
+        self.assertTrue(legacy.exists())
         self.assertTrue((final_dir / "UPLOAD_ORDER.md").exists())
+        manifest = self.job_dir / "seedance" / "part_compilation_manifest.json"
+        manifest_before = manifest.read_bytes()
+        rollback_before = (
+            rollback / "seedance_web_final" / "old.txt"
+        ).read_bytes()
+
+        self.run_pack("render", "--replace")
+
+        self.assertEqual(manifest.read_bytes(), manifest_before)
+        self.assertEqual(
+            (rollback / "seedance_web_final" / "old.txt").read_bytes(),
+            rollback_before,
+        )
+        self.assertTrue((final_dir / "UPLOAD_ORDER.md").exists())
+
+        voiceover = self.job_dir / "voiceover" / "voiceover.md"
+        voiceover.write_text("tampered\n", encoding="utf-8")
+        self.run_pack("render", "--replace")
+        self.assertNotEqual(
+            voiceover.read_text(encoding="utf-8"),
+            "tampered\n",
+        )
+        self.assertEqual(
+            (
+                rollback / "voiceover" / "voiceover.md"
+            ).read_text(encoding="utf-8"),
+            "tampered\n",
+        )
+
+    def test_replace_failure_restores_current_handoff(self):
+        from pre_seedance_pack import render_plan
+
+        self.run_pack("init")
+        self._fill_plan(mode="web")
+        current = self.job_dir / "seedance_web_final" / "old.txt"
+        current.parent.mkdir()
+        current.write_text("still-current\n", encoding="utf-8")
+
+        with mock.patch(
+            "pre_seedance_pack.compile_and_merge",
+            side_effect=RuntimeError("injected render failure"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "injected render failure"):
+                render_plan(self.root, self.job_id, replace=True)
+
+        self.assertEqual(current.read_text(encoding="utf-8"), "still-current\n")
+        self.assertFalse((self.job_dir / "voiceover" / "voiceover.md").exists())
+        self.assertFalse((self.job_dir / "seam" / "seam_design.md").exists())
 
     def test_audio_cutter_caps_duration_and_accepts_injected_runner(self):
         from pre_seedance_pack import cut_audio_segment

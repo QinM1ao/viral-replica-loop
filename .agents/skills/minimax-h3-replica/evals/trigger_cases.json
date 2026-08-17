@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "skill": "minimax-h3-replica",
+  "purpose": "Verify the explicit MiniMax H3 trigger boundary against neighboring ShotLoom routes.",
+  "cases": [
+    {
+      "id": "h3-trigger-new-replica",
+      "kind": "positive",
+      "prompt": "使用 MiniMax H3 完全复刻这个视频，换成我的女模特和喷雾产品。",
+      "expected_skill": "minimax-h3-replica",
+      "near_neighbor": "viral-replica",
+      "why": "The user explicitly selects MiniMax H3 for source-video replication."
+    },
+    {
+      "id": "h3-trigger-existing-job",
+      "kind": "positive",
+      "prompt": "把现有 job-002 改成 MiniMax H3 的两段复刻素材包并直接生成。",
+      "expected_skill": "minimax-h3-replica",
+      "near_neighbor": "viral-replica",
+      "why": "The user explicitly adapts an existing replica Job to MiniMax H3."
+    },
+    {
+      "id": "h3-neighbor-generic-replica",
+      "kind": "near_neighbor",
+      "prompt": "完全复刻这个视频，替换人物和产品，停在视频生成前。",
+      "expected_skill": "viral-replica",
+      "should_not_route": "minimax-h3-replica",
+      "why": "Generic replication does not select MiniMax H3."
+    },
+    {
+      "id": "h3-neighbor-seedance-25",
+      "kind": "near_neighbor",
+      "prompt": "用 Seedance 2.5 复刻这个视频，给我30秒上传包和深度参考。",
+      "expected_skill": "seedance-25-replica",
+      "should_not_route": "minimax-h3-replica",
+      "why": "The user explicitly selects a different provider route."
+    },
+    {
+      "id": "h3-negative-prompt-reference",
+      "kind": "negative",
+      "prompt": "解释 MiniMax H3 的 Ref2VA 六段提示词是什么意思，不要复刻或生成视频。",
+      "expected_skill": "h3-prompt-writing",
+      "should_not_route": "minimax-h3-replica",
+      "why": "Prompt-format explanation without replication belongs to the prompt reference skill."
+    },
+    {
+      "id": "h3-negative-unrelated-minimax",
+      "kind": "negative",
+      "prompt": "帮我查一下 MiniMax 公司的最新融资新闻。",
+      "expected_skill": "research",
+      "should_not_route": "minimax-h3-replica",
+      "why": "Mentioning MiniMax outside H3 video replication must not activate the workflow."
+    }
+  ]
+}

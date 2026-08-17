@@ -113,7 +113,17 @@ def _is_within(path, parent):
 
 
 def validate_compilation_manifest(job_dir, manifest_path=None):
-    job_dir = Path(job_dir).resolve()
+    logical_job_dir = Path(job_dir)
+    if logical_job_dir.parent.name == "output":
+        workspace_root = logical_job_dir.parents[1].resolve()
+    elif (
+        logical_job_dir.name == "work"
+        and logical_job_dir.parent.parent.name == "jobs"
+    ):
+        workspace_root = logical_job_dir.parents[2].resolve()
+    else:
+        workspace_root = logical_job_dir.parents[1].resolve()
+    job_dir = logical_job_dir.resolve()
     manifest_path = (
         Path(manifest_path).resolve()
         if manifest_path
@@ -155,7 +165,7 @@ def validate_compilation_manifest(job_dir, manifest_path=None):
     for frozen in manifest.get("frozen_inputs") or []:
         path = Path(str(frozen.get("path") or ""))
         if not path.is_absolute():
-            path = job_dir.parents[1] / path
+            path = workspace_root / path
         path = path.resolve()
         if not path.is_file() or _sha256(path) != frozen.get("sha256"):
             issues.append(f"frozen input changed or is missing: {path}")
@@ -229,10 +239,19 @@ def compile_and_merge(
     worker_count = min(max(1, int(max_workers)), MAX_WORKERS, len(ordered_part_ids))
     frozen_inputs = tuple(frozen_inputs)
     frozen_before = _frozen_snapshot(frozen_inputs)
+    if job_dir.parent.name == "output":
+        root = job_dir.parents[1]
+        plan_job_id = job_dir.name
+        job_output_root = None
+    elif job_dir.name == "work" and job_dir.parent.parent.name == "jobs":
+        root = job_dir.parents[2]
+        plan_job_id = job_dir.parent.name
+        job_output_root = str(job_dir)
+    else:
+        raise ValueError(
+            "job_dir must use output/<job-id> or jobs/<job-id>/work"
+        )
     job_dir = job_dir.resolve()
-    if job_dir.parent.name != "output":
-        raise ValueError("job_dir must be under the workspace output directory")
-    root = job_dir.parents[1]
     staging_parent = job_dir / ".pre_seedance_pack_staging"
     staging_parent.mkdir(parents=True, exist_ok=True)
     staging_root = Path(tempfile.mkdtemp(prefix="run_", dir=staging_parent))
@@ -254,15 +273,15 @@ def compile_and_merge(
             }
             for part_id, packet_dir in zip(ordered_part_ids, packet_dirs)
         ]
-        plan = stage_execution.seal_plan(
-            root,
-            {
-                "schema_version": 1,
-                "job_id": job_dir.name,
-                "stage": "pre_seedance_part_compile",
-                "packets": packets,
-            },
-        )
+        plan_payload = {
+            "schema_version": 1,
+            "job_id": plan_job_id,
+            "stage": "pre_seedance_part_compile",
+            "packets": packets,
+        }
+        if job_output_root is not None:
+            plan_payload["job_output_root"] = job_output_root
+        plan = stage_execution.seal_plan(root, plan_payload)
         compiled_by_part = {}
 
         def dispatch(packet):

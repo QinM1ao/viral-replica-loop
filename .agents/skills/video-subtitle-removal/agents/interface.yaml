@@ -9,7 +9,7 @@ compatibility:
   activation:
     mode: path_scoped
     paths:
-      - "."
+      - "/Users/qmio/Documents/助理/viral-replica-loop"
   execution:
     context: inline
     shell: bash

@@ -123,7 +123,7 @@ ffmpeg -y -i "<原片音频.wav>" -ss 14.56 -t 15 \
 如果图片还没有 asset：
 
 ```bash
-python3 ~/.codex/skills/seedance/scripts/seedance_ai_router.py \
+python3 /Users/qmio/.codex/skills/seedance/scripts/seedance_ai_router.py \
   --prompt-file "<Part1提示词.txt>" \
   --images "<part1_storyboard_url>" "<product_url>" "<person_url>" \
   --audios "<voice_part1_15s_mp3_url>" \
@@ -136,7 +136,7 @@ python3 ~/.codex/skills/seedance/scripts/seedance_ai_router.py \
 如果图片已经审核成 asset：
 
 ```bash
-python3 ~/.codex/skills/seedance/scripts/seedance_ai_router.py \
+python3 /Users/qmio/.codex/skills/seedance/scripts/seedance_ai_router.py \
   --prompt-file "<Part1提示词.txt>" \
   --images "asset://asset-storyboard" "asset://asset-product" "asset://asset-person" \
   --audios "<voice_part1_15s_mp3_url>" \

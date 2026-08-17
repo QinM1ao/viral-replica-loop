@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "provider": "wujie_higress",
+  "endpoint": "https://higress-api.wujieai.com/v1/chat/completions",
+  "model": "doubao-seed-2-0-mini-260215",
+  "analysis_mode": "full",
+  "sampling_fps": 2,
+  "source_sha256": "6a539fda58034f8026b1ff713a4505d1c3a8f6bd75299d5446303d87e147156d",
+  "submitted_video_sha256": "a69acf0c32bb0f5e94334072706021c50db020d1206fc36d816042302a65f5af",
+  "submitted_video_size_bytes": 32518,
+  "prompt_sha256": "827b76761fa5f8fc8556c536a76f524a468104719060fdada3a9ab73dcfb1990",
+  "http_status": 200,
+  "network_allowed": false,
+  "real_submit": false
+}

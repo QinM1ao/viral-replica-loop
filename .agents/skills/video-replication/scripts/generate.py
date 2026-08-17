@@ -12,6 +12,7 @@ Environment:
   MATPOOL_API_KEY     Matpool token API key.
   MATPOOL_BASE_URL    Optional. Defaults to https://token.matpool.com/v1.
   MATPOOL_IMAGE_MODEL Optional. Defaults to GPT-Image-2.
+  MATPOOL_READ_TIMEOUT_SECONDS Optional. Defaults to 900 seconds.
 """
 
 import argparse
@@ -29,7 +30,11 @@ import httpx
 
 MATPOOL_BASE = "https://token.matpool.com/v1"
 MATPOOL_MODEL = "GPT-Image-2"
-DEFAULT_TIMEOUT = 350
+DEFAULT_READ_TIMEOUT_SECONDS = 900
+CONNECT_TIMEOUT_SECONDS = 30
+WRITE_TIMEOUT_SECONDS = 180
+POOL_TIMEOUT_SECONDS = 30
+OUTCOME_UNKNOWN_EXIT_CODE = 3
 QUALITY_LEVELS = ["low", "medium", "high", "auto"]
 
 SIZE_SHORTCUTS = {
@@ -71,6 +76,10 @@ DEFAULT_SOURCE_EXCLUSIONS = [
     "old_mud_color",
     "subtitles",
 ]
+
+
+class MatpoolOutcomeUnknown(RuntimeError):
+    """The request may have completed remotely, but no response reached us."""
 
 
 def load_config():
@@ -166,7 +175,9 @@ def first_ref_path(entries, role):
 
 def update_invocation_manifest(path, *, status, config=None, prompt_path=None, prompt_text="", refs=None,
                                outputs=None, args=None, started_at=None, finished_at=None,
-                               duration_seconds=None, error=None, quality=None, size=None):
+                               duration_seconds=None, error=None, quality=None, size=None,
+                               failure_kind=None, provider_outcome=None,
+                               automatic_retry_allowed=None):
     refs = refs or []
     outputs = outputs or []
     data = {
@@ -186,6 +197,7 @@ def update_invocation_manifest(path, *, status, config=None, prompt_path=None, p
         "started_at": started_at,
         "finished_at": finished_at,
         "duration_seconds": duration_seconds,
+        "read_timeout_seconds": (config or {}).get("read_timeout_seconds"),
         "inputs_attached_or_loaded": bool(refs),
         "actual_image_inputs_loaded": bool(refs),
         "matpool_uses_real_image_inputs": bool(refs),
@@ -193,6 +205,9 @@ def update_invocation_manifest(path, *, status, config=None, prompt_path=None, p
         "actual_image_refs_loaded_before_generation": refs,
         "output_paths": outputs,
         "error": error,
+        "failure_kind": failure_kind,
+        "provider_outcome": provider_outcome,
+        "automatic_retry_allowed": automatic_retry_allowed,
         "deprecated_fallbacks_tried": [],
     }
     write_json(path, data)
@@ -324,7 +339,31 @@ def api_config():
         or cfg_value(cfg, "matpool_base_url", ("matpool", "base_url"), MATPOOL_BASE)
     )
     model = os.environ.get("MATPOOL_IMAGE_MODEL") or cfg_value(cfg, "matpool_model", ("matpool", "model"), MATPOOL_MODEL)
-    return {"base": str(base).rstrip("/"), "key": key, "model": model}
+    read_timeout = (
+        os.environ.get("MATPOOL_READ_TIMEOUT_SECONDS")
+        or cfg_value(
+            cfg,
+            "matpool_read_timeout_seconds",
+            ("matpool", "read_timeout_seconds"),
+            DEFAULT_READ_TIMEOUT_SECONDS,
+        )
+    )
+    return {
+        "base": str(base).rstrip("/"),
+        "key": key,
+        "model": model,
+        "read_timeout_seconds": positive_seconds(read_timeout),
+    }
+
+
+def positive_seconds(value):
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError) as exc:
+        raise argparse.ArgumentTypeError("timeout must be a positive number of seconds") from exc
+    if seconds <= 0:
+        raise argparse.ArgumentTypeError("timeout must be a positive number of seconds")
+    return seconds
 
 
 def resolve_size(size_str):
@@ -396,7 +435,8 @@ def save_images(result, output_path, fmt="png"):
 
 
 def matpool_call(config, prompt, size, quality, n, image_paths=None,
-                 background=None, moderation=None, output_format=None, user=None):
+                 background=None, moderation=None, output_format=None, user=None,
+                 read_timeout_seconds=DEFAULT_READ_TIMEOUT_SECONDS):
     refs = local_ref_paths(image_paths)
     payload = {"model": config["model"], "prompt": prompt}
     if size:
@@ -415,33 +455,45 @@ def matpool_call(config, prompt, size, quality, n, image_paths=None,
         payload["user"] = user
 
     headers = {"Authorization": f"Bearer {config['key']}"}
-    if refs:
-        files = []
-        handles = []
-        try:
-            for idx, path in enumerate(refs, start=1):
-                mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-                suffix = path.suffix.lower() or ".png"
-                handle = path.open("rb")
-                handles.append(handle)
-                files.append(("image", (f"reference-{idx}{suffix}", handle, mime)))
+    request_timeout = httpx.Timeout(
+        connect=CONNECT_TIMEOUT_SECONDS,
+        read=read_timeout_seconds,
+        write=WRITE_TIMEOUT_SECONDS,
+        pool=POOL_TIMEOUT_SECONDS,
+    )
+    try:
+        if refs:
+            files = []
+            handles = []
+            try:
+                for idx, path in enumerate(refs, start=1):
+                    mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+                    suffix = path.suffix.lower() or ".png"
+                    handle = path.open("rb")
+                    handles.append(handle)
+                    files.append(("image", (f"reference-{idx}{suffix}", handle, mime)))
+                resp = httpx.post(
+                    f"{config['base']}/images/edits",
+                    headers=headers,
+                    data=payload,
+                    files=files,
+                    timeout=request_timeout,
+                )
+            finally:
+                for handle in handles:
+                    handle.close()
+        else:
             resp = httpx.post(
-                f"{config['base']}/images/edits",
-                headers=headers,
-                data=payload,
-                files=files,
-                timeout=DEFAULT_TIMEOUT,
+                f"{config['base']}/images/generations",
+                headers={**headers, "Content-Type": "application/json"},
+                json=payload,
+                timeout=request_timeout,
             )
-        finally:
-            for handle in handles:
-                handle.close()
-    else:
-        resp = httpx.post(
-            f"{config['base']}/images/generations",
-            headers={**headers, "Content-Type": "application/json"},
-            json=payload,
-            timeout=DEFAULT_TIMEOUT,
-        )
+    except httpx.ReadTimeout as exc:
+        raise MatpoolOutcomeUnknown(
+            "Matpool response timed out after the request may have been accepted; "
+            "the provider outcome is unknown and this request must not be retried automatically"
+        ) from exc
 
     if resp.status_code != 200:
         print(f"error: {resp.status_code} from Matpool API: {resp.text[:2000]}", file=sys.stderr)
@@ -465,6 +517,12 @@ def main():
     parser.add_argument("--background", default=None, help="Background: auto or opaque")
     parser.add_argument("--moderation", default=None, help="Moderation: auto or low")
     parser.add_argument("--user", default=None, help="End-user identifier")
+    parser.add_argument(
+        "--read-timeout-seconds",
+        type=positive_seconds,
+        default=None,
+        help="Matpool response wait limit; defaults to MATPOOL_READ_TIMEOUT_SECONDS or 900",
+    )
     parser.add_argument("--no-retry", action="store_true", help="Disable quality downgrade retry")
     parser.add_argument("--job-id", default="", help="Loop job id for contract evidence")
     parser.add_argument("--stage", default="image_batch_qc", help="Loop stage for contract evidence")
@@ -515,6 +573,8 @@ def main():
         config = api_config()
         if args.model:
             config["model"] = args.model
+        if args.read_timeout_seconds is not None:
+            config["read_timeout_seconds"] = args.read_timeout_seconds
         for quality in quality_levels:
             try:
                 size = resolve_size(args.size)
@@ -529,6 +589,7 @@ def main():
                     moderation=args.moderation,
                     output_format=args.format,
                     user=args.user,
+                    read_timeout_seconds=config["read_timeout_seconds"],
                 )
                 outputs = []
                 for path in save_images(result, output_path, args.format):
@@ -555,6 +616,7 @@ def main():
                     duration_seconds=duration,
                     quality=quality,
                     size=size,
+                    provider_outcome="succeeded",
                 )
                 update_contract(
                     args.contract,
@@ -569,12 +631,35 @@ def main():
                 )
                 update_visual_manifest(args.visual_manifest, args=args, refs=refs, outputs=outputs)
                 return
-            except SystemExit:
+            except (SystemExit, MatpoolOutcomeUnknown):
                 raise
             except Exception as exc:
                 last_error = exc
                 if quality != quality_levels[-1]:
                     print(f"warning: quality {quality} failed ({exc}), retrying", file=sys.stderr)
+    except MatpoolOutcomeUnknown as exc:
+        finished_at = time.strftime("%Y-%m-%dT%H:%M:%S")
+        update_invocation_manifest(
+            args.invocation_manifest,
+            status="STOP",
+            config=config,
+            prompt_path=prompt_path,
+            prompt_text=prompt,
+            refs=refs,
+            outputs=[],
+            args=args,
+            started_at=started_at,
+            finished_at=finished_at,
+            duration_seconds=round(time.time() - started, 3),
+            error=str(exc),
+            quality=args.quality,
+            size=resolve_size(args.size),
+            failure_kind="provider_result_unknown",
+            provider_outcome="unknown",
+            automatic_retry_allowed=False,
+        )
+        print(f"stop: {exc}", file=sys.stderr)
+        sys.exit(OUTCOME_UNKNOWN_EXIT_CODE)
     except SystemExit as exc:
         finished_at = time.strftime("%Y-%m-%dT%H:%M:%S")
         update_invocation_manifest(

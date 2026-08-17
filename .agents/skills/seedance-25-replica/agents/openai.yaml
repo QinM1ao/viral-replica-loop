@@ -1,0 +1,4 @@
+interface:
+  display_name: "Seedance 2.5 复刻"
+  short_description: "按 30 秒任务生成仅运镜深度参考与精简复刻提示词包"
+  default_prompt: "使用 Seedance 2.5 复刻这条视频，准备素材并通过已验证的 2509 路线生成；付费提交前先让我确认。"

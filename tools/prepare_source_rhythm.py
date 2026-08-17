@@ -147,8 +147,55 @@ def extract_evidence_frames(video, output_dir, fps, width, height):
     ]
 
 
+def annotate_evidence_frames(frames, cuts, duration, fps):
+    cut_times = sorted(
+        float(item["time"])
+        for item in cuts
+        if isinstance(item, dict)
+        and isinstance(item.get("time"), (int, float))
+        and 0 < float(item["time"]) < float(duration)
+    )
+    guard_band = 1.0 / float(fps)
+    annotated = []
+    for frame in frames:
+        item = dict(frame)
+        timestamp = float(item["time"])
+        previous_cuts = [cut for cut in cut_times if cut <= timestamp]
+        next_cuts = [cut for cut in cut_times if cut > timestamp]
+        shot_start = previous_cuts[-1] if previous_cuts else 0.0
+        shot_end = next_cuts[0] if next_cuts else float(duration)
+        cut_distance = (
+            min(abs(timestamp - cut) for cut in cut_times)
+            if cut_times
+            else None
+        )
+        item.update(
+            {
+                "shot_start": round(shot_start, 3),
+                "shot_end": round(shot_end, 3),
+                "distance_to_nearest_cut": (
+                    round(cut_distance, 3) if cut_distance is not None else None
+                ),
+                "cut_guard_band_seconds": round(guard_band, 3),
+                "safe_for_beat_evidence": (
+                    cut_distance is None or cut_distance + 1e-9 >= guard_band
+                ),
+            }
+        )
+        annotated.append(item)
+    return annotated
+
+
 def prepare(video, threshold, evidence_dir, evidence_fps):
     info = probe_video(video)
+    cuts = detect_cuts(video, threshold)
+    frames = extract_evidence_frames(
+        video,
+        evidence_dir,
+        evidence_fps,
+        info["width"],
+        info["height"],
+    )
     return {
         "schema_version": 3,
         "source_video": str(video),
@@ -158,15 +205,14 @@ def prepare(video, threshold, evidence_dir, evidence_fps):
             "method": "ffmpeg_scene_score",
             "threshold": threshold,
         },
-        "actual_cut_points": detect_cuts(video, threshold),
+        "actual_cut_points": cuts,
         "audio_energy": measure_audio_energy(video, info["duration"]),
         "evidence_fps": evidence_fps,
-        "evidence_frames": extract_evidence_frames(
-            video,
-            evidence_dir,
+        "evidence_frames": annotate_evidence_frames(
+            frames,
+            cuts,
+            info["duration"],
             evidence_fps,
-            info["width"],
-            info["height"],
         ),
         "source_evidence": {
             "asr_text": "",

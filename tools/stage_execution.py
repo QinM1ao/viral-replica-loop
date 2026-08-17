@@ -6,6 +6,7 @@ from __future__ import annotations
 import _thread
 import ctypes
 import errno
+import fcntl
 import hashlib
 import json
 import os
@@ -40,6 +41,7 @@ RESTORABLE_SUFFIXES = {
 }
 MAX_RESTORABLE_BYTES = 1024 * 1024
 MAX_TOTAL_RESTORABLE_BYTES = 32 * 1024 * 1024
+MAX_EXTERNAL_MEMORY_BACKUP_BYTES = 256 * 1024 * 1024
 IGNORED_RUNTIME_NAMES = {
     ".cache",
     ".git",
@@ -175,6 +177,7 @@ def _packet_audit_hook(event, args):
     if (
         event in {"os.posix_spawn", "os.posix_spawnp"}
         and not getattr(_PACKET_POLICY, "launching_sandbox", False)
+        and policy.get("protection_mode") != "external_sandbox"
     ):
         _deny_packet_mutation(policy, event, args[0] if args else None)
 
@@ -195,6 +198,20 @@ def _sandbox_profile(policy):
 def _sandboxed_popen(*popenargs, **kwargs):
     policy = getattr(_PACKET_POLICY, "current", None)
     if policy is None:
+        return _ORIGINAL_POPEN(*popenargs, **kwargs)
+    if policy.get("protection_mode") == "serial_fallback":
+        return _ORIGINAL_POPEN(*popenargs, **kwargs)
+    if policy.get("protection_mode") == "external_sandbox":
+        packet_temp_root = str(policy["sandbox_write_roots"][0])
+        child_env = dict(kwargs.get("env") or os.environ)
+        child_env.update(
+            {
+                "TMPDIR": packet_temp_root,
+                "TMP": packet_temp_root,
+                "TEMP": packet_temp_root,
+            }
+        )
+        kwargs["env"] = child_env
         return _ORIGINAL_POPEN(*popenargs, **kwargs)
     sandbox_exec = Path("/usr/bin/sandbox-exec")
     if not sandbox_exec.is_file():
@@ -263,6 +280,10 @@ def _policy_thread_start(thread, *args, **kwargs):
         child_policy = {
             "allowed_roots": policy["sandbox_write_roots"],
             "sandbox_write_roots": policy["sandbox_write_roots"],
+            "protection_mode": policy.get(
+                "protection_mode",
+                "sandboxed",
+            ),
             "violations": policy["violations"],
             "threads": policy["threads"],
         }
@@ -393,15 +414,39 @@ def validate_identifier(value, field):
         )
 
 
+def bound_job_root(root, plan):
+    root = Path(root).resolve()
+    job_id = str(plan.get("job_id") or "").strip()
+    legacy_job_root = (root / "output" / job_id).resolve()
+    canonical_workspace_job_root = (root / "jobs" / job_id / "work").resolve()
+    canonical_context_job_root = (
+        root.parent.parent / "jobs" / job_id / "work"
+    ).resolve()
+    job_root = resolve_path(
+        root,
+        plan.get("job_output_root") or legacy_job_root,
+    )
+    if job_root not in {
+        legacy_job_root,
+        canonical_workspace_job_root,
+        canonical_context_job_root,
+    }:
+        raise PlanError(
+            "stage execution job_output_root is outside the bound Job"
+        )
+    return job_root
+
+
 def coordinator_only_paths(root, plan):
     root = Path(root).resolve()
+    job_root = bound_job_root(root, plan)
     paths = []
     for value in (
         list(DEFAULT_COORDINATOR_ONLY_PATHS)
         + list(plan.get("coordinator_only_paths") or [])
     ):
         path = resolve_path(root, value)
-        if not is_within(path, root):
+        if not is_within(path, root) and not is_within(path, job_root):
             raise PlanError(f"coordinator-only path must stay inside root: {value}")
         paths.append(path)
     return tuple(dict.fromkeys(paths))
@@ -423,7 +468,7 @@ def validate_plan(root, plan):
     validate_identifier(job_id, "job_id")
     validate_identifier(stage, "stage")
 
-    job_root = (root / "output" / job_id).resolve()
+    job_root = bound_job_root(root, plan)
     coordinator_only = set(coordinator_only_paths(root, plan))
     packets = plan.get("packets")
     if not isinstance(packets, list) or not packets:
@@ -468,7 +513,7 @@ def validate_plan(root, plan):
             resolved_write_roots.append(write_root)
             if not is_within(write_root, job_root):
                 raise PlanError(
-                    f"packet {packet_id} write root must stay under output/{job_id}: "
+                    f"packet {packet_id} write root must stay under the bound Job: "
                     f"{value}"
                 )
             for protected in coordinator_only:
@@ -481,7 +526,7 @@ def validate_plan(root, plan):
         completion_path = resolve_path(root, packet.get("completion_path") or "")
         if not is_within(completion_path, job_root):
             raise PlanError(
-                f"packet {packet_id} completion_path must stay under output/{job_id}"
+                f"packet {packet_id} completion_path must stay under the bound Job"
             )
         for protected in coordinator_only:
             if (
@@ -545,6 +590,36 @@ def seal_plan(root, plan):
     validate_plan(root, sealed)
     sealed["plan_sha256"] = stable_hash(sealed)
     return sealed
+
+
+def combine_plans(root, plans, *, stage):
+    plans = list(plans or [])
+    if len(plans) < 2:
+        raise PlanError("combine_plans requires at least two sealed plans")
+    for plan in plans:
+        if not plan.get("plan_sha256"):
+            raise PlanError("combine_plans requires sealed plans")
+        validate_plan(root, plan)
+    job_ids = {plan["job_id"] for plan in plans}
+    if len(job_ids) != 1:
+        raise PlanError("combined plans must belong to one job")
+    job_roots = {bound_job_root(root, plan) for plan in plans}
+    if len(job_roots) != 1:
+        raise PlanError("combined plans must bind one job output root")
+    coordinator_paths = []
+    packets = []
+    for plan in plans:
+        coordinator_paths.extend(plan.get("coordinator_only_paths") or [])
+        packets.extend(plan["packets"])
+    combined = {
+        "schema_version": 1,
+        "job_id": next(iter(job_ids)),
+        "stage": stage,
+        "job_output_root": display_path(root, next(iter(job_roots))),
+        "coordinator_only_paths": list(dict.fromkeys(coordinator_paths)),
+        "packets": packets,
+    }
+    return seal_plan(root, combined)
 
 
 def _assert_acyclic(packets):
@@ -683,15 +758,422 @@ def _default_dispatcher(root, runner):
             capture_output=True,
             check=False,
         )
+        outputs = packet.get("expected_outputs")
+        if outputs is None:
+            outputs = [
+                value
+                for value in packet.get("allowed_write_roots") or []
+                if Path(value).is_file() and not Path(value).is_symlink()
+            ]
         return {
             "status": "PASS" if completed.returncode == 0 else "FAIL",
-            "outputs": list(packet.get("expected_outputs") or []),
+            "outputs": list(outputs or []),
             "returncode": completed.returncode,
             "stdout": completed.stdout or "",
             "stderr": completed.stderr or "",
         }
 
     return dispatch
+
+
+def _sandbox_execution_available():
+    return Path("/usr/bin/sandbox-exec").is_file()
+
+
+def _external_sandbox_execution_active():
+    return False
+
+
+def _external_sandbox_workspace_root():
+    return None
+
+
+def _uses_serial_fallback(protection_mode):
+    return protection_mode in {"serial_fallback", "external_sandbox"}
+
+
+def _git_status_entries(root):
+    completed = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(root),
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+        ],
+        check=False,
+        capture_output=True,
+    )
+    if completed.returncode != 0:
+        return None
+    records = completed.stdout.split(b"\0")
+    entries = {}
+    index = 0
+    while index < len(records):
+        raw = records[index]
+        index += 1
+        if not raw:
+            continue
+        if len(raw) < 4:
+            continue
+        status_code = raw[:2].decode("ascii", errors="replace")
+        path = (Path(root) / os.fsdecode(raw[3:])).absolute()
+        if is_within(path, root):
+            entries[path] = status_code
+        if "R" in status_code or "C" in status_code:
+            if index < len(records) and records[index]:
+                source = (
+                    Path(root) / os.fsdecode(records[index])
+                ).absolute()
+                if is_within(source, root):
+                    entries[source] = f"{status_code}:source"
+            index += 1
+    return entries
+
+
+def _git_ignore_rule_paths(root):
+    completed = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(root),
+            "ls-files",
+            "-z",
+            "--",
+            ".gitignore",
+            ":(glob)**/.gitignore",
+        ],
+        check=False,
+        capture_output=True,
+    )
+    if completed.returncode != 0:
+        return ()
+    paths = []
+    for raw in completed.stdout.split(b"\0"):
+        if not raw:
+            continue
+        path = (Path(root) / os.fsdecode(raw)).absolute()
+        if is_within(path, root) and path.is_file():
+            paths.append(path)
+    return tuple(paths)
+
+
+def _restorable_status_paths(entries):
+    if entries is None:
+        return ()
+    paths = []
+    for path in entries:
+        if (
+            path.is_file()
+            and not path.is_symlink()
+            and path.stat().st_size <= MAX_RESTORABLE_BYTES
+        ):
+            paths.append(path)
+    return tuple(paths)
+
+
+def _snapshot_large_status_paths(root, entries):
+    candidates = []
+    if entries is not None:
+        for path in entries:
+            if (
+                path.is_file()
+                and not path.is_symlink()
+                and path.stat().st_size > MAX_RESTORABLE_BYTES
+            ):
+                candidates.append(path)
+    if not candidates:
+        return {"entries": {}, "backup_root": None}
+    backup_root = Path(
+        tempfile.mkdtemp(
+            prefix=".stage-execution-dirty-",
+            dir=Path(root).parent,
+        )
+    )
+    snapshot = {}
+    try:
+        for index, path in enumerate(candidates):
+            metadata = path.stat()
+            backup = backup_root / f"{index:06d}"
+            _clone_or_copy_file(path, backup)
+            snapshot[path] = {
+                "signature": _entry_signature(path),
+                "backup": backup,
+                "atime_ns": metadata.st_atime_ns,
+            }
+    except Exception:
+        shutil.rmtree(backup_root, ignore_errors=True)
+        raise
+    return {"entries": snapshot, "backup_root": backup_root}
+
+
+def _restore_large_status_changes(snapshot):
+    violations = []
+    for path, before in snapshot["entries"].items():
+        if (
+            path.is_file()
+            and not path.is_symlink()
+            and _entry_signature(path) == before["signature"]
+        ):
+            continue
+        if path.exists() or path.is_symlink():
+            _remove_path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(before["backup"], path)
+        mode, _, mtime_ns, _, _ = before["signature"]
+        path.chmod(stat.S_IMODE(mode))
+        os.utime(
+            path,
+            ns=(before["atime_ns"], mtime_ns),
+            follow_symlinks=False,
+        )
+        violations.append(
+            (
+                path,
+                "large workspace path changed and was restored",
+                True,
+            )
+        )
+    return violations
+
+
+def _cleanup_large_status_snapshot(snapshot):
+    backup_root = snapshot.get("backup_root")
+    if backup_root:
+        shutil.rmtree(backup_root, ignore_errors=True)
+
+
+def _restore_workspace_status_changes(root, before):
+    if before is None:
+        return []
+    violations = []
+    reported = set()
+    for _ in range(2):
+        after = _git_status_entries(root)
+        if after is None:
+            return [
+                *violations,
+                (
+                    Path(root) / ".git",
+                    "workspace status check failed after execution",
+                    False,
+                ),
+            ]
+        for path in sorted(
+            set(before) | set(after),
+            key=lambda value: value.as_posix(),
+        ):
+            before_code = before.get(path)
+            after_code = after.get(path)
+            if before_code == after_code:
+                continue
+            restored_ok = True
+            reason = "workspace path changed and was restored"
+            if after_code is None:
+                restored_ok = False
+                reason = (
+                    "workspace path was deleted and could not be restored"
+                )
+            elif after_code == "??":
+                _remove_path(path)
+            else:
+                relative = path.relative_to(root).as_posix()
+                restored = subprocess.run(
+                    [
+                        "git",
+                        "-C",
+                        str(root),
+                        "checkout-index",
+                        "--force",
+                        "--",
+                        relative,
+                    ],
+                    check=False,
+                    capture_output=True,
+                )
+                if restored.returncode != 0:
+                    restored_ok = False
+                    reason = (
+                        "workspace path changed and could not be restored"
+                    )
+            key = (path, reason)
+            if key in reported:
+                continue
+            reported.add(key)
+            violations.append(
+                (
+                    path,
+                    reason,
+                    restored_ok,
+                )
+            )
+    return violations
+
+
+def _quarantine_other_output_entries(root, job_id):
+    output_root = Path(root) / "output"
+    if not output_root.is_dir():
+        return {
+            "output_root": output_root,
+            "job_id": job_id,
+            "backup_root": None,
+            "moved": {},
+            "restored": False,
+        }
+    entries = [
+        path
+        for path in output_root.iterdir()
+        if path.name != job_id
+    ]
+    if not entries:
+        return {
+            "output_root": output_root,
+            "job_id": job_id,
+            "backup_root": None,
+            "moved": {},
+            "restored": False,
+        }
+    backup_root = Path(
+        tempfile.mkdtemp(
+            prefix=".stage-execution-other-jobs-",
+            dir=Path(root).parent,
+        )
+    )
+    moved = {}
+    try:
+        for path in entries:
+            backup = backup_root / path.name
+            os.replace(path, backup)
+            moved[path.name] = backup
+    except Exception:
+        for name, backup in moved.items():
+            canonical = output_root / name
+            if backup.exists() or backup.is_symlink():
+                os.replace(backup, canonical)
+        shutil.rmtree(backup_root, ignore_errors=True)
+        raise
+    return {
+        "output_root": output_root,
+        "job_id": job_id,
+        "backup_root": backup_root,
+        "moved": moved,
+        "restored": False,
+    }
+
+
+def _restore_quarantined_output_entries(quarantine):
+    if quarantine.get("restored"):
+        return []
+    output_root = quarantine["output_root"]
+    moved = quarantine["moved"]
+    violations = []
+    if output_root.is_dir():
+        for path in list(output_root.iterdir()):
+            if path.name == quarantine["job_id"]:
+                continue
+            if path.name in moved:
+                _remove_path(path)
+                violations.append(
+                    (
+                        path,
+                        "other job path changed and was restored",
+                        True,
+                    )
+                )
+            else:
+                _remove_path(path)
+                violations.append(
+                    (
+                        path,
+                        "new other job path was removed",
+                        True,
+                    )
+                )
+    output_root.mkdir(parents=True, exist_ok=True)
+    for name, backup in moved.items():
+        canonical = output_root / name
+        if backup.exists() or backup.is_symlink():
+            os.replace(backup, canonical)
+    backup_root = quarantine.get("backup_root")
+    if backup_root:
+        shutil.rmtree(backup_root, ignore_errors=True)
+        quarantine["backup_root"] = None
+    quarantine["restored"] = True
+    return violations
+
+
+def _quarantine_git_metadata(root):
+    git_root = Path(root) / ".git"
+    if not git_root.exists():
+        return {
+            "git_root": git_root,
+            "backup_root": None,
+            "backup": None,
+            "restored": False,
+        }
+    backup_root = Path(
+        tempfile.mkdtemp(
+            prefix=".stage-execution-git-",
+            dir=Path(root).parent,
+        )
+    )
+    backup = backup_root / ".git"
+    try:
+        os.replace(git_root, backup)
+    except Exception:
+        shutil.rmtree(backup_root, ignore_errors=True)
+        raise
+    return {
+        "git_root": git_root,
+        "backup_root": backup_root,
+        "backup": backup,
+        "restored": False,
+    }
+
+
+def _restore_quarantined_git_metadata(quarantine):
+    if quarantine.get("restored"):
+        return []
+    git_root = quarantine["git_root"]
+    backup = quarantine.get("backup")
+    violations = []
+    if git_root.exists() or git_root.is_symlink():
+        _remove_path(git_root)
+        violations.append(
+            (
+                git_root,
+                "Git metadata changed and was restored",
+                True,
+            )
+        )
+    if backup is not None and (
+        backup.exists() or backup.is_symlink()
+    ):
+        os.replace(backup, git_root)
+    backup_root = quarantine.get("backup_root")
+    if backup_root:
+        shutil.rmtree(backup_root, ignore_errors=True)
+        quarantine["backup_root"] = None
+    quarantine["restored"] = True
+    return violations
+
+
+def _job_control_paths(root, job_id):
+    job_root = Path(root) / "output" / job_id
+    if not job_root.is_dir():
+        return ()
+    paths = []
+    for path in job_root.rglob("*"):
+        if (
+            path.is_file()
+            and not path.is_symlink()
+            and path.suffix.lower() in RESTORABLE_SUFFIXES
+            and path.stat().st_size <= MAX_RESTORABLE_BYTES
+        ):
+            paths.append(path.resolve())
+    return tuple(paths)
 
 
 def _dispatch_packet(root, packet, dispatcher):
@@ -703,6 +1185,10 @@ def _dispatch_packet(root, packet, dispatcher):
         policy = {
             "allowed_roots": packet_write_roots,
             "sandbox_write_roots": packet_write_roots,
+            "protection_mode": packet.get(
+                "_protection_mode",
+                "sandboxed",
+            ),
             "violations": [],
             "threads": [],
         }
@@ -879,6 +1365,7 @@ def _clone_or_copy_file(source, destination):
     source = Path(source)
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
+    cloned = False
     try:
         if not _CLONEFILE_CHECKED:
             libc = ctypes.CDLL(None, use_errno=True)
@@ -899,14 +1386,29 @@ def _clone_or_copy_file(source, destination):
         ) != 0:
             error_number = ctypes.get_errno()
             raise OSError(error_number, os.strerror(error_number))
-        shutil.copystat(source, destination, follow_symlinks=False)
+        cloned = True
     except AttributeError:
         _CLONEFILE = None
         _CLONEFILE_CHECKED = True
-        shutil.copy2(source, destination, follow_symlinks=False)
     except OSError:
         if destination.exists() or destination.is_symlink():
             _remove_path(destination)
+    if not cloned:
+        try:
+            with source.open("rb") as source_handle:
+                with destination.open("xb") as destination_handle:
+                    fcntl.ioctl(
+                        destination_handle.fileno(),
+                        0x40049409,
+                        source_handle.fileno(),
+                    )
+            cloned = True
+        except OSError:
+            if destination.exists() or destination.is_symlink():
+                _remove_path(destination)
+    if cloned:
+        shutil.copystat(source, destination, follow_symlinks=False)
+    else:
         shutil.copy2(source, destination, follow_symlinks=False)
     return str(destination)
 
@@ -1068,6 +1570,37 @@ def _unresolved_path(root, value):
 def _assert_write_root_has_no_symlink(root, value):
     workspace = _unresolved_path(root, ".")
     write_root = _unresolved_path(root, value)
+
+    def is_canonical_job_alias(path):
+        try:
+            relative_path = path.relative_to(workspace)
+        except ValueError:
+            return False
+        if (
+            len(relative_path.parts) != 2
+            or relative_path.parts[0] != "output"
+        ):
+            return False
+        job_id = relative_path.parts[1]
+        canonical_work = workspace / "jobs" / job_id / "work"
+        if (
+            canonical_work.is_dir()
+            and path.resolve() == canonical_work.resolve()
+        ):
+            return True
+        context_path = workspace / f"execution-context-{job_id}.json"
+        try:
+            context = json.loads(context_path.read_text(encoding="utf-8"))
+            context_work = Path(context["job_root"]) / "work"
+        except (OSError, KeyError, TypeError, ValueError):
+            return False
+        return (
+            context.get("job_id") == job_id
+            and context.get("state_root") == str(workspace)
+            and context_work.is_dir()
+            and path.resolve() == context_work.resolve()
+        )
+
     try:
         relative = write_root.relative_to(workspace)
     except ValueError:
@@ -1077,6 +1610,8 @@ def _assert_write_root_has_no_symlink(root, value):
         for part in relative.parts:
             current = current / part
             if current.is_symlink():
+                if is_canonical_job_alias(current):
+                    continue
                 raise PlanError(
                     f"packet write root contains a symlink: {current}"
                 )
@@ -1240,19 +1775,17 @@ def _audit_staging_outputs(staging_root, before, provisional):
                     True,
                 )
             )
-    all_directories = (
-        set(before["directories"]) | set(after["directories"])
-    )
-    for path in sorted(
-        all_directories,
-        key=lambda value: value.as_posix(),
-    ):
+    all_entries = set(before["entries"]) | set(after["entries"])
+    all_directories = set(before["directories"]) | set(after["directories"])
+    for path in sorted(all_directories, key=lambda value: value.as_posix()):
         if before["directories"].get(path) == after["directories"].get(path):
             continue
         if any(
             effect == path or is_within(effect, path)
             for effect in declared
         ):
+            continue
+        if not any(is_within(entry, path) for entry in all_entries):
             continue
         if not any(item[0] == path for item in violations):
             violations.append(
@@ -1265,7 +1798,14 @@ def _audit_staging_outputs(staging_root, before, provisional):
     return violations
 
 
-def _capture_output_tree(root, allowed_paths, backup=True):
+def _capture_output_tree(
+    root,
+    allowed_paths,
+    backup=True,
+    backup_parent=None,
+    include_runtime_caches=False,
+    force_memory_backup=False,
+):
     output_root = Path(root).resolve()
     entries = {}
     directories = {}
@@ -1277,14 +1817,19 @@ def _capture_output_tree(root, allowed_paths, backup=True):
             "entries": entries,
             "directories": directories,
             "backup_root": backup_root,
+            "include_runtime_caches": include_runtime_caches,
         }
     if not output_root.is_dir():
         raise PlanError("stage execution root must be a directory")
-    if backup:
+    if backup and not force_memory_backup:
         backup_root = Path(
             tempfile.mkdtemp(
                 prefix=".stage-execution-audit-",
-                dir=output_root.parent,
+                dir=(
+                    Path(backup_parent)
+                    if backup_parent is not None
+                    else output_root.parent
+                ),
             )
         )
 
@@ -1298,16 +1843,17 @@ def _capture_output_tree(root, allowed_paths, backup=True):
             dirnames[:] = sorted(
                 name
                 for name in dirnames
-                if name not in IGNORED_RUNTIME_NAMES
+                if include_runtime_caches
+                or name not in IGNORED_RUNTIME_NAMES
             )
-            if not _is_runtime_cache(current):
+            if include_runtime_caches or not _is_runtime_cache(current):
                 directories[current] = _entry_signature(current)
             for name in list(dirnames):
                 path = current / name
                 if not path.is_symlink():
                     continue
                 dirnames.remove(name)
-                if _is_runtime_cache(path):
+                if not include_runtime_caches and _is_runtime_cache(path):
                     continue
                 entries[path] = {
                     "kind": "symlink",
@@ -1316,7 +1862,7 @@ def _capture_output_tree(root, allowed_paths, backup=True):
                 }
             for name in sorted(filenames):
                 path = current / name
-                if _is_runtime_cache(path):
+                if not include_runtime_caches and _is_runtime_cache(path):
                     continue
                 metadata = path.lstat()
                 if stat.S_ISLNK(metadata.st_mode):
@@ -1340,7 +1886,19 @@ def _capture_output_tree(root, allowed_paths, backup=True):
                     and not _path_is_allowed(path, allowed_paths)
                 ):
                     entry["atime_ns"] = metadata.st_atime_ns
-                    if (
+                    if force_memory_backup:
+                        if (
+                            backup_bytes + metadata.st_size
+                            > MAX_EXTERNAL_MEMORY_BACKUP_BYTES
+                        ):
+                            raise PlanError(
+                                "external sandbox audit requires more than "
+                                f"{MAX_EXTERNAL_MEMORY_BACKUP_BYTES} bytes "
+                                "of trusted in-memory backup"
+                            )
+                        entry["backup"] = path.read_bytes()
+                        backup_bytes += metadata.st_size
+                    elif (
                         metadata.st_size <= MAX_RESTORABLE_BYTES
                         and (
                             backup_bytes + metadata.st_size
@@ -1368,6 +1926,7 @@ def _capture_output_tree(root, allowed_paths, backup=True):
         "entries": entries,
         "directories": directories,
         "backup_root": backup_root,
+        "include_runtime_caches": include_runtime_caches,
     }
 
 
@@ -1420,7 +1979,15 @@ def _restore_output_entry(path, before):
 
 
 def _audit_output_write_set(root, before, allowed_paths):
-    after = _capture_output_tree(root, allowed_paths, backup=False)
+    after = _capture_output_tree(
+        root,
+        allowed_paths,
+        backup=False,
+        include_runtime_caches=before.get(
+            "include_runtime_caches",
+            False,
+        ),
+    )
     before_entries = before["entries"]
     after_entries = after["entries"]
     violations = []
@@ -1674,6 +2241,7 @@ def execute_plan(
     coordinator_commit=None,
     max_workers=8,
     runner=subprocess.run,
+    audit_mode="targeted",
 ):
     """Dispatch dependency-ready packets and fan them into one coordinator commit."""
     root = Path(root).resolve()
@@ -1682,8 +2250,46 @@ def execute_plan(
     validate_plan(root, plan)
     if not isinstance(max_workers, int) or max_workers < 1:
         raise PlanError("max_workers must be a positive integer")
+    if audit_mode not in {"targeted", "full"}:
+        raise PlanError("audit_mode must be targeted or full")
+    execution_started = time.perf_counter()
+    timing = {
+        "audit_mode": audit_mode,
+        "repository_audit_seconds": 0.0,
+        "prepare_seconds": 0.0,
+        "task_seconds": 0.0,
+        "check_seconds": 0.0,
+        "writeback_seconds": 0.0,
+        "cleanup_seconds": 0.0,
+    }
+    if _external_sandbox_execution_active():
+        protection_mode = "external_sandbox"
+    elif not _sandbox_execution_available():
+        protection_mode = "serial_fallback"
+    else:
+        protection_mode = "sandboxed"
+    timing["protection_mode"] = protection_mode
+    external_workspace_root = None
+    if protection_mode == "external_sandbox":
+        external_workspace_root = _external_sandbox_workspace_root()
+        if external_workspace_root is None:
+            raise PlanError(
+                "external sandbox execution requires its audited Workspace root"
+            )
+        external_workspace_root = Path(external_workspace_root).resolve()
+        if (
+            not external_workspace_root.is_dir()
+            or not is_within(root, external_workspace_root)
+        ):
+            raise PlanError(
+                "external sandbox Workspace root must contain the execution root"
+            )
+    worker_limit = (
+        1 if _uses_serial_fallback(protection_mode) else max_workers
+    )
     selected_dispatcher = dispatcher or _default_dispatcher(root, runner)
-    protected_paths = coordinator_only_paths(root, plan)
+    coordinator_paths = coordinator_only_paths(root, plan)
+    timing["protected_path_count"] = 0
     packets = {packet["packet_id"]: packet for packet in plan["packets"]}
     pending = set(packets)
     completions = {}
@@ -1727,11 +2333,52 @@ def execute_plan(
                 runnable.append(packet_id)
         if not runnable:
             continue
+        prepare_started = time.perf_counter()
+        job_control_before = set(
+            _job_control_paths(root, plan["job_id"])
+        )
+        protected_paths = [
+            *coordinator_paths,
+            *job_control_before,
+        ]
+        workspace_status_before = None
+        large_status_snapshot = {
+            "entries": {},
+            "backup_root": None,
+        }
+        output_quarantine = {
+            "output_root": root / "output",
+            "job_id": plan["job_id"],
+            "backup_root": None,
+            "moved": {},
+            "restored": False,
+        }
+        fallback_job_snapshot = None
+        external_workspace_snapshot = None
+        git_quarantine = {
+            "git_root": root / ".git",
+            "backup_root": None,
+            "backup": None,
+            "restored": False,
+        }
+        if _uses_serial_fallback(protection_mode):
+            workspace_status_before = _git_status_entries(root)
+            protected_paths.extend(
+                _restorable_status_paths(workspace_status_before)
+            )
+            protected_paths.extend(_git_ignore_rule_paths(root))
+        protected_paths = tuple(dict.fromkeys(protected_paths))
+        timing["protected_path_count"] = max(
+            timing["protected_path_count"],
+            len(protected_paths),
+        )
         staging_roots, runtime_packets = _prepare_runtime_packets(
             root,
             plan,
             runnable,
         )
+        for packet in runtime_packets.values():
+            packet["_protection_mode"] = protection_mode
         staging_snapshots = {
             packet_id: _capture_staging_tree(
                 staging_roots[packet_id]
@@ -1740,29 +2387,82 @@ def execute_plan(
         }
         protected_snapshot = _snapshot_coordinator_only(protected_paths)
         output_audit_allowed = tuple(protected_paths)
-        output_snapshot = _capture_output_tree(
-            root,
-            output_audit_allowed,
-            backup=True,
+        timing["prepare_seconds"] += (
+            time.perf_counter() - prepare_started
         )
+        output_snapshot = None
+        if audit_mode == "full":
+            audit_started = time.perf_counter()
+            output_snapshot = _capture_output_tree(
+                root,
+                output_audit_allowed,
+                backup=True,
+            )
+            audit_elapsed = time.perf_counter() - audit_started
+            timing["repository_audit_seconds"] += audit_elapsed
+            timing["check_seconds"] += audit_elapsed
         provisional = {}
         try:
-            with ThreadPoolExecutor(
-                max_workers=min(max_workers, len(runnable))
-            ) as executor:
-                futures = {
-                    executor.submit(
-                        _dispatch_packet,
+            if _uses_serial_fallback(protection_mode):
+                fallback_prepare_started = time.perf_counter()
+                large_status_snapshot = _snapshot_large_status_paths(
+                    root,
+                    workspace_status_before,
+                )
+                fallback_job_snapshot = _capture_output_tree(
+                    root / "output" / plan["job_id"],
+                    (),
+                    backup=True,
+                    backup_parent=root.parent,
+                )
+                output_quarantine = (
+                    _quarantine_other_output_entries(
+                        root,
+                        plan["job_id"],
+                    )
+                )
+                git_quarantine = _quarantine_git_metadata(root)
+                if protection_mode == "external_sandbox":
+                    external_workspace_snapshot = _capture_output_tree(
+                        external_workspace_root,
+                        tuple(staging_roots.values()),
+                        backup=True,
+                        include_runtime_caches=True,
+                        force_memory_backup=True,
+                    )
+                timing["prepare_seconds"] += (
+                    time.perf_counter() - fallback_prepare_started
+                )
+            task_started = time.perf_counter()
+            if not _uses_serial_fallback(protection_mode):
+                with ThreadPoolExecutor(
+                    max_workers=min(worker_limit, len(runnable))
+                ) as executor:
+                    futures = {
+                        executor.submit(
+                            _dispatch_packet,
+                            root,
+                            runtime_packets[packet_id],
+                            selected_dispatcher,
+                        ): packet_id
+                        for packet_id in runnable
+                    }
+                    for future in as_completed(futures):
+                        packet_id = futures[future]
+                        provisional[packet_id] = future.result()
+                        pending.remove(packet_id)
+            if _uses_serial_fallback(protection_mode):
+                for packet_id in runnable:
+                    provisional[packet_id] = _dispatch_packet(
                         root,
                         runtime_packets[packet_id],
                         selected_dispatcher,
-                    ): packet_id
-                    for packet_id in runnable
-                }
-                for future in as_completed(futures):
-                    packet_id = futures[future]
-                    provisional[packet_id] = future.result()
+                    )
                     pending.remove(packet_id)
+            timing["task_seconds"] += (
+                time.perf_counter() - task_started
+            )
+            check_started = time.perf_counter()
             changed_protected = _changed_coordinator_only(
                 protected_snapshot
             )
@@ -1772,18 +2472,75 @@ def execute_plan(
                 violations.extend(
                     (
                         path,
-                        "coordinator-only path changed and was restored",
+                        "protected path changed and was restored",
                         True,
                     )
                     for path in changed_protected
                 )
-            violations.extend(
-                _audit_output_write_set(
-                    root,
-                    output_snapshot,
-                    output_audit_allowed,
+            if _uses_serial_fallback(protection_mode):
+                violations.extend(
+                    _audit_output_write_set(
+                        root / "output" / plan["job_id"],
+                        fallback_job_snapshot,
+                        (),
+                    )
                 )
+                if external_workspace_snapshot is not None:
+                    violations.extend(
+                        _audit_output_write_set(
+                            external_workspace_root,
+                            external_workspace_snapshot,
+                            tuple(staging_roots.values()),
+                        )
+                    )
+                violations.extend(
+                    _restore_large_status_changes(
+                        large_status_snapshot
+                    )
+                )
+            current_job_controls = set(
+                _job_control_paths(root, plan["job_id"])
             )
+            for path in sorted(
+                current_job_controls - job_control_before
+            ):
+                _remove_path(path)
+                violations.append(
+                    (
+                        path,
+                        "new job control file was removed",
+                        True,
+                    )
+                )
+            if _uses_serial_fallback(protection_mode):
+                violations.extend(
+                    _restore_quarantined_git_metadata(
+                        git_quarantine
+                    )
+                )
+                violations.extend(
+                    _restore_quarantined_output_entries(
+                        output_quarantine
+                    )
+                )
+                violations.extend(
+                    _restore_workspace_status_changes(
+                        root,
+                        workspace_status_before,
+                    )
+                )
+            if output_snapshot is not None:
+                audit_started = time.perf_counter()
+                violations.extend(
+                    _audit_output_write_set(
+                        root,
+                        output_snapshot,
+                        output_audit_allowed,
+                    )
+                )
+                timing["repository_audit_seconds"] += (
+                    time.perf_counter() - audit_started
+                )
             promotion_states = {}
             for packet_id in runnable:
                 packet_violations = _audit_staging_outputs(
@@ -1816,6 +2573,10 @@ def execute_plan(
                                 False,
                             )
                         )
+            timing["check_seconds"] += (
+                time.perf_counter() - check_started
+            )
+            writeback_started = time.perf_counter()
             if violations:
                 error = _write_set_error(root, violations)
                 policy_errors = [
@@ -1830,9 +2591,14 @@ def execute_plan(
                     )
                 for packet_id in runnable:
                     item = provisional[packet_id]
+                    packet_error = str(item.get("error") or "").strip()
                     item["status"] = "FAIL"
                     item["outputs"] = []
-                    item["error"] = error
+                    item["error"] = (
+                        f"{error}; packet failed before promotion: {packet_error}"
+                        if packet_error
+                        else error
+                    )
                     completions[packet_id] = _finalize_runtime_completion(
                         root,
                         plan,
@@ -1873,10 +2639,32 @@ def execute_plan(
                                 provisional[packet_id],
                             )
                         )
+            timing["writeback_seconds"] += (
+                time.perf_counter() - writeback_started
+            )
         finally:
-            _cleanup_snapshot(output_snapshot)
+            cleanup_started = time.perf_counter()
+            if output_snapshot is not None:
+                _cleanup_snapshot(output_snapshot)
+            if fallback_job_snapshot is not None:
+                _cleanup_snapshot(fallback_job_snapshot)
+            if external_workspace_snapshot is not None:
+                _cleanup_snapshot(external_workspace_snapshot)
+            _cleanup_large_status_snapshot(
+                large_status_snapshot
+            )
+            if _uses_serial_fallback(protection_mode):
+                _restore_quarantined_git_metadata(
+                    git_quarantine
+                )
+                _restore_quarantined_output_entries(
+                    output_quarantine
+                )
             for staging_root in staging_roots.values():
                 shutil.rmtree(staging_root, ignore_errors=True)
+            timing["cleanup_seconds"] += (
+                time.perf_counter() - cleanup_started
+            )
 
     ordered = [
         completions[packet["packet_id"]]
@@ -1896,7 +2684,18 @@ def execute_plan(
         "stage": plan["stage"],
         "overall": overall,
         "completions": ordered,
+        "timing": {
+            **timing,
+            "total_seconds": time.perf_counter() - execution_started,
+        },
     }
     if coordinator_commit is not None:
+        writeback_started = time.perf_counter()
         coordinator_commit(report)
+        report["timing"]["writeback_seconds"] += (
+            time.perf_counter() - writeback_started
+        )
+    report["timing"]["total_seconds"] = (
+        time.perf_counter() - execution_started
+    )
     return report

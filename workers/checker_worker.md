@@ -59,7 +59,7 @@ Before invoking this worker, run `python3 tools/qc_risk_ledger.py --root . --job
 9. Apply the request's label review policy literally. `small_or_distant_product_text=visual_match_only` means distant, oblique, multi-bottle, or storyboard-scale microtext is judged by overall label color, line layout, brand impression, and product identity; it need not reproduce every tiny character. `microtext_only_mismatch_outcome=VISUAL_WARNING` means such microtext variation must not be the sole reason for hard `FAIL`. For this label warning, write `Failure type: product_label_microtext_only`; no other label-related failure type may use `VISUAL_WARNING`. A hard label failure remains valid for a wrong product or brand, wrong bottle/package form, invented spray/mist hardware, wrong label design, blank or smoothed label, old-source label, or a designated hero close-up whose major brand/product-name anchor is missing or clearly wrong.
 11. For visual stages, require passing visual asset manifest QC before returning `PASS`.
 12. For image sample and image batch stages, require passing GPT Image contract QC before returning `PASS`.
-13. For `source_blueprint`, first confirm the Seed 2.0 Mini analysis used the exact configured Wujie provider/model, HTTP 200, and current source hash. Then inspect the real source video plus cited 5fps frames. Treat model output as semantic coverage, not ground truth: any conflict with raw ASR, visible text, measured cuts, or pixels must be resolved in favor of direct evidence. Confirm every source beat's line, speaker mode, scene, camera, framing, hard-cut/continuous transition, emphasis, pause, action peak, emotion function, visual action, and `visual_action_type`. Confirm every `spoken_product_names` item is literally a product/brand entity in the line, never a hook or selling sentence. For every `physical_change`, inspect all three before/peak/after refs and confirm that contact/motion and the visible after-state really occur. A plausible model or prose summary cannot override raw ASR or visible-text evidence; any unsupported word correction or imagined action is `FAIL`.
+13. For `source_blueprint`, first confirm the Seed 2.0 Mini analysis used the exact configured Wujie provider/model, HTTP 200, and current source hash. Then inspect the real source video plus cited 5fps frames. Treat model output as semantic coverage, not ground truth: any conflict with raw ASR, visible text, measured cuts, or pixels must be resolved in favor of direct evidence. Confirm every source beat's line, speaker mode, scene, camera, framing, hard-cut/continuous transition, emphasis, pause, action peak, emotion function, visual action, and `visual_action_type`. Confirm every `spoken_product_names` item is literally a product/brand entity in the line, never a hook or selling sentence. For every `physical_change`, inspect all three before/peak/after refs and confirm that contact/motion and the visible after-state really occur. A plausible model or prose summary cannot overwrite raw ASR evidence; any non-visible correction must retain the raw wording and record a concrete semantic-review reason with confidence of at least 0.9. Any unsupported word correction or imagined action is `FAIL`.
 14. For `source_blueprint`, write `output/<job-id>/checks/source_rhythm_visual_review.json` with one item for every source beat, including `removable`: `beat_id`, `reviewed_frame_refs`, `description_matches_evidence`, `action_type_matches_evidence`, optional `physical_action_matches`, and concrete `notes`. When `spoken_product_names` is non-empty, also include the exact `confirmed_spoken_product_names` list and `spoken_product_names_are_product_entities=true` only after the cited pixels confirm that the words name a product or brand rather than an arbitrary phrase. Then run:
 
 ```bash
@@ -91,6 +91,9 @@ output/<job-id>/checks/<stage>_gate_review.md
 ```
 
 25. Bind the single checker result to the requested family fingerprints before recording it:
+   - Copy the current semantic review request's `request_id` into `Risk request id`.
+   - Compute the current semantic review request file's SHA-256 and copy it into `Risk request sha256`.
+   - Never reuse these two fields from an older review request.
 
 ```bash
 python3 tools/checker_review_qc.py \
@@ -107,6 +110,8 @@ python3 tools/checker_review_qc.py \
 Gate:
 Job:
 Stage:
+Risk request id:
+Risk request sha256:
 Input artifacts:
 Checks:
 Result: PASS / FAIL / STOP

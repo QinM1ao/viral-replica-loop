@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "roles": [
+    "source_video",
+    "source_audio",
+    "product_reference",
+    "current_job_storyboard",
+    "source_locked_script",
+    "provider_request_summary",
+    "provider_synthetic_response",
+    "branch_decision_table",
+    "single_variable_failure_table",
+    "finishing_part_01",
+    "finishing_part_02",
+    "finishing_master",
+    "final_technical_qc_input",
+    "subtitle_clean_input",
+    "subtitle_burned_in_input",
+    "source_blueprint_checker_verdict",
+    "image_batch_checker_verdict",
+    "pre_seedance_checker_verdict",
+    "subtitle_classification_verdicts"
+  ]
+}

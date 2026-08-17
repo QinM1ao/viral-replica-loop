@@ -111,7 +111,7 @@ The current loop has historical status names. The runner maps them into this can
 | `voiceover` | Legacy fallback: `$video-replication` original subtitle + ASR + rewritten script | Script maps lines to shots and source rhythm | `seam` |
 | `seam` | Legacy fallback: `$video-replication` seam design | Boundary states and no-freeze plan written | `seedance_prompt` |
 | `seedance_prompt` | Legacy fallback: `$video-replication` Seedance prompt rebuild | Clean Seedance 2.0 prompts, model-facing reference roles, ordered time/Shot blocks with bound visual/voice/SFX | `audio_boundary_qc` |
-| `audio_boundary_qc` | Legacy fallback: `$video-replication` Qwen ASR on reference audio | No duplicated boundary line, every audio <=15.00s, target 14.90s | `request_qc` |
+| `audio_boundary_qc` | Legacy fallback: `$video-replication` ElevenLabs ASR on reference audio | No duplicated boundary line, every audio <=15.00s, target 14.90s | `request_qc` |
 | `request_qc` | Legacy fallback: `$video-replication` upload refs/audio, build taskCode request JSON | Request body has correct images/audio/order/taskCode and the exact selected Seedance model EP | `generation_approval` |
 | `generation_approval` | Human/cost gate | User explicitly approves paid/batch Seedance generation | `generation` |
 | `generation` | Seedance task create + poll + download | `selected_outputs.json` binds every selected Part; Seedance output is treated as flattened video plus optional audio, never a separate subtitle track | `finishing` |

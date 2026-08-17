@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "baseline_request": "provider/request.json",
+  "mutations": [
+    {
+      "mutation_id": "frozen-input-mismatch",
+      "json_path": "frozen_input.sha256",
+      "value": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "expected_stop_code": "unmatched_request"
+    },
+    {
+      "mutation_id": "model-mismatch",
+      "json_path": "provider.model",
+      "value": "fixture-semantic-v2",
+      "expected_stop_code": "unmatched_request"
+    },
+    {
+      "mutation_id": "parameter-mismatch",
+      "json_path": "parameters.temperature",
+      "value": 0.1,
+      "expected_stop_code": "unmatched_request"
+    },
+    {
+      "mutation_id": "approval-mismatch",
+      "json_path": "approval.approval_id",
+      "value": "different-approval",
+      "expected_stop_code": "unmatched_request"
+    },
+    {
+      "mutation_id": "reference-order-mismatch",
+      "json_path": "reference_order",
+      "value": [
+        "product_reference",
+        "source_video",
+        "source_audio"
+      ],
+      "expected_stop_code": "unmatched_request"
+    },
+    {
+      "mutation_id": "expired-request",
+      "json_path": "expires_at",
+      "value": "2020-01-01T00:00:00Z",
+      "expected_stop_code": "request_expired"
+    },
+    {
+      "mutation_id": "network-attempt",
+      "json_path": "recorder_controls.network_access",
+      "value": true,
+      "expected_stop_code": "network_forbidden"
+    },
+    {
+      "mutation_id": "network-endpoint",
+      "json_path": "provider.endpoint",
+      "value": "https://provider.invalid/v1/tasks",
+      "expected_stop_code": "network_forbidden"
+    },
+    {
+      "mutation_id": "real-submit-attempt",
+      "json_path": "recorder_controls.real_submit",
+      "value": true,
+      "expected_stop_code": "real_submit_forbidden"
+    },
+    {
+      "mutation_id": "golden-refresh-attempt",
+      "json_path": "recorder_controls.refresh_golden",
+      "value": true,
+      "expected_stop_code": "golden_refresh_forbidden"
+    }
+  ]
+}

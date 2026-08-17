@@ -1502,6 +1502,139 @@ class GenerationFanoutTest(unittest.TestCase):
         self.assertIn("write set", report["results"][0]["error"])
         self.assertFalse(forbidden.exists())
 
+    def test_paid_dispatch_promotes_all_provider_evidence(self):
+        plan = self.make_single_plan()
+        self.assertEqual(self.pass_preflight(plan)["overall"], "PASS")
+        reserve_plan(self.root, plan)
+
+        def successful_provider_runner(command, cwd):
+            request = Path(command[command.index("--request") + 1])
+            out_dir = Path(command[command.index("--out-dir") + 1])
+            output = Path(command[command.index("--output") + 1])
+            out_dir.mkdir(parents=True, exist_ok=True)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            request_hash = hashlib.sha256(request.read_bytes()).hexdigest()
+            (out_dir / "request.json").write_bytes(request.read_bytes())
+            for filename in (
+                "request_contract.json",
+                "reference_audio_preflight.json",
+            ):
+                (out_dir / filename).write_text(
+                    json.dumps(
+                        {
+                            "overall": "PASS",
+                            "request_sha256": request_hash,
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+            provider_evidence = {
+                "create_response.json": '{"success":true}\n',
+                "task_key.txt": "task-key-123\n",
+                "task_info.json": '{"status":"succeeded"}\n',
+                "task_info_history.jsonl": '{"status":"running"}\n',
+                "ffprobe.json": '{"format":{"duration":"12.5"}}\n',
+            }
+            for filename, contents in provider_evidence.items():
+                (out_dir / filename).write_text(contents, encoding="utf-8")
+            output.write_bytes(b"generated-video")
+            (out_dir / "summary.json").write_text(
+                json.dumps(
+                    {
+                        "status": "succeeded",
+                        "video": str(output),
+                        "duration_seconds_actual": 12.5,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+
+        report = run_reserved_parts(
+            self.root,
+            plan,
+            runner=successful_provider_runner,
+        )
+
+        self.assertEqual(report["overall"], "PASS")
+        canonical_out_dir = Path(plan["parts"][0]["out_dir"])
+        for filename in (
+            "request.json",
+            "request_contract.json",
+            "reference_audio_preflight.json",
+            "create_response.json",
+            "task_key.txt",
+            "task_info.json",
+            "task_info_history.jsonl",
+            "summary.json",
+            "ffprobe.json",
+        ):
+            self.assertTrue((canonical_out_dir / filename).is_file(), filename)
+        self.assertTrue(Path(plan["parts"][0]["output_path"]).is_file())
+
+    def test_paid_dispatch_preserves_provider_evidence_on_failure(self):
+        plan = self.make_single_plan()
+        self.assertEqual(self.pass_preflight(plan)["overall"], "PASS")
+        reserve_plan(self.root, plan)
+
+        def failed_provider_runner(command, cwd):
+            request = Path(command[command.index("--request") + 1])
+            out_dir = Path(command[command.index("--out-dir") + 1])
+            out_dir.mkdir(parents=True, exist_ok=True)
+            request_hash = hashlib.sha256(request.read_bytes()).hexdigest()
+            (out_dir / "request.json").write_bytes(request.read_bytes())
+            for filename in (
+                "request_contract.json",
+                "reference_audio_preflight.json",
+            ):
+                (out_dir / filename).write_text(
+                    json.dumps(
+                        {
+                            "overall": "PASS",
+                            "request_sha256": request_hash,
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+            (out_dir / "create_response.json").write_text(
+                '{"success":true}\n',
+                encoding="utf-8",
+            )
+            (out_dir / "task_key.txt").write_text(
+                "task-key-failed-123\n",
+                encoding="utf-8",
+            )
+            (out_dir / "task_info.json").write_text(
+                '{"status":"failed"}\n',
+                encoding="utf-8",
+            )
+            (out_dir / "task_info_history.jsonl").write_text(
+                '{"status":"running"}\n{"status":"failed"}\n',
+                encoding="utf-8",
+            )
+            return SimpleNamespace(
+                returncode=5,
+                stdout="provider failed",
+                stderr="",
+            )
+
+        report = run_reserved_parts(
+            self.root,
+            plan,
+            runner=failed_provider_runner,
+        )
+
+        self.assertEqual(report["overall"], "FAIL")
+        canonical_out_dir = Path(plan["parts"][0]["out_dir"])
+        for filename in (
+            "create_response.json",
+            "task_key.txt",
+            "task_info.json",
+            "task_info_history.jsonl",
+        ):
+            self.assertTrue((canonical_out_dir / filename).is_file(), filename)
+
     def test_run_uses_injected_runner_and_spends_each_reservation_once(self):
         plan = self.make_plan()
         reservation_path = (
@@ -1576,6 +1709,17 @@ class GenerationFanoutTest(unittest.TestCase):
         self.assertEqual(report["overall"], "PASS")
         self.assertEqual(report["attempt"], 1)
         self.assertEqual(report["approval_claims"], plan["approval_claims"])
+        self.assertGreaterEqual(report["provider_wait_seconds"], 0)
+        self.assertGreaterEqual(
+            report["provider_task_wait_seconds_total"],
+            report["provider_wait_seconds"],
+        )
+        self.assertTrue(
+            all(
+                item["provider_wait_seconds"] >= 0
+                for item in report["results"]
+            )
+        )
         self.assertEqual(len(calls), 4)
         self.assertTrue(
             all(call[0][:2] == ["python3", "tools/seedance_taskcode_runner.py"] for call in calls)

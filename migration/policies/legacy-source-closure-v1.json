@@ -1,0 +1,398 @@
+{
+  "schema_version": 1,
+  "policy_id": "legacy-source-closure-v1",
+  "description": "Explicit allowlist for the current LegacyLayout implementation bytes. It reads the live checkout, including untracked implementation files, and never substitutes Git HEAD.",
+  "source_selectors": [
+    {
+      "path": "AGENTS.md",
+      "role": "operating_document",
+      "retention": "plugin_content",
+      "reason": "Current repository operating contract."
+    },
+    {
+      "path": "CONTEXT.md",
+      "role": "operating_document",
+      "retention": "plugin_content",
+      "reason": "Current domain vocabulary and behavior boundaries."
+    },
+    {
+      "path": "COST_POLICY.md",
+      "role": "workflow_rule",
+      "retention": "plugin_content",
+      "reason": "Paid-action and approval policy used by the loop."
+    },
+    {
+      "path": "LOOP.md",
+      "role": "workflow_rule",
+      "retention": "plugin_content",
+      "reason": "Current loop stage contract."
+    },
+    {
+      "path": "PRODUCT_CONSTRAINTS.md",
+      "role": "workflow_rule",
+      "retention": "plugin_content",
+      "reason": "Current product constraint contract."
+    },
+    {
+      "path": "QC_RULES.md",
+      "role": "workflow_rule",
+      "retention": "plugin_content",
+      "reason": "Current quality-control contract."
+    },
+    {
+      "path": "README.md",
+      "role": "operating_document",
+      "retention": "plugin_content",
+      "reason": "Current installation and operator entry documentation."
+    },
+    {
+      "path": "LICENSE",
+      "role": "license",
+      "retention": "plugin_content",
+      "reason": "License attached to the current implementation."
+    },
+    {
+      "path": "requirements.txt",
+      "role": "runtime_declaration",
+      "retention": "plugin_content",
+      "reason": "Declared Python dependency boundary."
+    },
+    {
+      "path": "install.sh",
+      "role": "engine_entrypoint",
+      "retention": "plugin_content",
+      "reason": "Current installation entrypoint."
+    },
+    {
+      "path": "reset-loop.sh",
+      "role": "engine_entrypoint",
+      "retention": "plugin_content",
+      "reason": "Current bounded loop reset entrypoint."
+    },
+    {
+      "path": "run-loop.sh",
+      "role": "engine_entrypoint",
+      "retention": "plugin_content",
+      "reason": "Current loop runner entrypoint."
+    },
+    {
+      "path": "BRIEF.example.md",
+      "role": "template",
+      "retention": "plugin_content",
+      "reason": "Fresh-workspace brief template."
+    },
+    {
+      "path": "STATE.example.md",
+      "role": "template",
+      "retention": "plugin_content",
+      "reason": "Fresh-workspace state template."
+    },
+    {
+      "path": "jobs.example.csv",
+      "role": "template",
+      "retention": "plugin_content",
+      "reason": "Fresh-workspace job registry template."
+    },
+    {
+      "root": ".agents/skills/viral-replica",
+      "include": [
+        "**"
+      ],
+      "exclude": [
+        "__pycache__/**",
+        "**/__pycache__/**",
+        "*.pyc"
+      ],
+      "role": "skill",
+      "retention": "plugin_content",
+      "reason": "Active orchestration Skill and its current references."
+    },
+    {
+      "root": ".agents/skills/video-replication",
+      "include": [
+        "**"
+      ],
+      "exclude": [
+        "archive/**",
+        "archive/**/*",
+        "reports/**",
+        "reports/**/*",
+        "__pycache__/**",
+        "**/__pycache__/**",
+        "*.pyc"
+      ],
+      "role": "skill",
+      "retention": "plugin_content",
+      "reason": "Active video-replication craft Skill; archived versions and validation reports are not active implementation."
+    },
+    {
+      "root": ".agents/skills/video-shot-refinement",
+      "include": [
+        "**"
+      ],
+      "exclude": [
+        "__pycache__/**",
+        "**/__pycache__/**",
+        "*.pyc"
+      ],
+      "role": "skill",
+      "retention": "plugin_content",
+      "reason": "Active bounded shot-refinement Skill, including currently untracked implementation bytes."
+    },
+    {
+      "root": ".agents/skills/video-subtitle-removal",
+      "include": [
+        "**"
+      ],
+      "exclude": [
+        "__pycache__/**",
+        "**/__pycache__/**",
+        "*.pyc"
+      ],
+      "role": "skill",
+      "retention": "plugin_content",
+      "reason": "Active bounded hard-subtitle-removal Skill, including currently untracked implementation bytes."
+    },
+    {
+      "root": "client-profiles",
+      "include": [
+        "**"
+      ],
+      "exclude": [
+        "kongfengchun/assets/**",
+        "kongfengchun/assets/**/*",
+        "__pycache__/**",
+        "**/__pycache__/**",
+        "*.pyc",
+        ".DS_Store"
+      ],
+      "role": "profile",
+      "retention": "legacy_archive_content",
+      "reason": "Current mixed customer-profile rules and learning evidence are required to reproduce LegacyLayout decisions but must be transformed and sanitized rather than copied into the Plugin Package."
+    },
+    {
+      "path": "client-profiles/kongfengchun/assets/product_front_tight.jpg",
+      "role": "workspace_reference",
+      "retention": "development_workspace_content",
+      "reason": "Current reusable product-front reference remains private Development Workspace content."
+    },
+    {
+      "path": "client-profiles/kongfengchun/assets/product_open_tight.jpg",
+      "role": "workspace_reference",
+      "retention": "development_workspace_content",
+      "reason": "Current reusable open-product material reference remains private Development Workspace content."
+    },
+    {
+      "path": "client-profiles/kongfengchun/assets/product_tight_reference_sheet_seedance_2refs.jpg",
+      "role": "workspace_reference",
+      "retention": "development_workspace_content",
+      "reason": "Current combined product-reference sheet remains private Development Workspace content."
+    },
+    {
+      "root": "client-profiles/kongfengchun/assets",
+      "include": [
+        "**"
+      ],
+      "exclude": [
+        "product_front_tight.jpg",
+        "product_open_tight.jpg",
+        "product_tight_reference_sheet_seedance_2refs.jpg"
+      ],
+      "role": "legacy_profile_evidence",
+      "retention": "legacy_archive_content",
+      "reason": "Historical storyboard, generated anchor, comparison, and source-analysis pixels remain in the read-only Legacy Archive and never enter plugin content."
+    },
+    {
+      "root": "docs",
+      "include": [
+        "*.md"
+      ],
+      "exclude": [
+        "assets/**",
+        "assets/**/*",
+        "issues/**",
+        "issues/**/*",
+        "prd/**",
+        "prd/**/*",
+        "research/**",
+        "research/**/*"
+      ],
+      "role": "operating_document",
+      "retention": "plugin_content",
+      "reason": "Current operator, workflow, domain, and ADR documentation; research and planning evidence remain outside the active source closure."
+    },
+    {
+      "root": "gates",
+      "include": [
+        "*.md"
+      ],
+      "exclude": [],
+      "role": "gate",
+      "retention": "plugin_content",
+      "reason": "Current stage gate contracts, including untracked active stages."
+    },
+    {
+      "root": "rules",
+      "include": [
+        "*.json"
+      ],
+      "exclude": [],
+      "role": "workflow_rule",
+      "retention": "plugin_content",
+      "reason": "Current machine-readable workflow and product rules, including untracked active rules."
+    },
+    {
+      "root": "scripts",
+      "include": [
+        "*.py",
+        "*.sh"
+      ],
+      "exclude": [
+        "__pycache__/**",
+        "**/__pycache__/**",
+        "*.pyc"
+      ],
+      "role": "engine_entrypoint",
+      "retention": "plugin_content",
+      "reason": "Current install, intake, validation, reporting, and maintenance entrypoints."
+    },
+    {
+      "root": "tests",
+      "include": [
+        "test_*.py",
+        "fixtures/**",
+        "fixtures/**/*"
+      ],
+      "exclude": [
+        "__pycache__/**",
+        "**/__pycache__/**",
+        "*.pyc"
+      ],
+      "role": "test",
+      "retention": "plugin_content",
+      "reason": "Current executable test closure, including untracked tests and deterministic fixtures."
+    },
+    {
+      "root": "tools",
+      "include": [
+        "*.py"
+      ],
+      "exclude": [
+        "__pycache__/**",
+        "**/__pycache__/**",
+        "*.pyc"
+      ],
+      "role": "engine",
+      "retention": "plugin_content",
+      "reason": "Current workflow implementation and QC tools, including untracked active tools."
+    },
+    {
+      "root": "workers",
+      "include": [
+        "*.md"
+      ],
+      "exclude": [],
+      "role": "worker",
+      "retention": "plugin_content",
+      "reason": "Current stage worker contracts, including untracked active stages."
+    },
+    {
+      "root": "migration/policies",
+      "include": [
+        "*.json"
+      ],
+      "exclude": [],
+      "role": "migration_policy",
+      "retention": "plugin_content",
+      "reason": "Immutable migration policies consumed by the baseline and later acceptance harness."
+    },
+    {
+      "path": "migration/README.md",
+      "role": "operating_document",
+      "retention": "plugin_content",
+      "reason": "Baseline freeze and verification operator contract."
+    }
+  ],
+  "protected_selectors": [
+    {
+      "path": "BRIEF.md",
+      "role": "legacy_control_state",
+      "reason": "Live legacy brief must not be rewritten by baseline operations."
+    },
+    {
+      "path": "STATE.md",
+      "role": "legacy_control_state",
+      "reason": "Live legacy state must not be rewritten by baseline operations."
+    },
+    {
+      "path": "jobs.csv",
+      "role": "legacy_control_state",
+      "reason": "Live legacy job registry must not be rewritten by baseline operations."
+    },
+    {
+      "path": "RUNNER_STATE.json",
+      "role": "legacy_control_state",
+      "reason": "Live runner control state must not be rewritten by baseline operations."
+    },
+    {
+      "path": "RUNNER_LAST_DECISION.md",
+      "role": "legacy_control_state",
+      "reason": "Latest legacy runner decision must remain byte-identical."
+    },
+    {
+      "path": "RUNNER_LAST_TRANSITION.md",
+      "role": "legacy_control_state",
+      "reason": "Latest legacy runner transition must remain byte-identical."
+    },
+    {
+      "path": ".run-loop.lock",
+      "role": "legacy_control_state",
+      "reason": "Existing loop lock bytes must not be changed by baseline operations."
+    },
+    {
+      "path": ".sync-inbox-to-jobs.lock",
+      "role": "legacy_control_state",
+      "reason": "Existing inbox synchronization lock bytes must not be changed by baseline operations."
+    },
+    {
+      "root": "output/job-011",
+      "include": [
+        "**"
+      ],
+      "exclude": [],
+      "role": "legacy_observation_anchor",
+      "reason": "Accepted ordinary Seedance 2.0 historical observation anchor; hash only, never copy or replay."
+    },
+    {
+      "root": "output/job-013",
+      "include": [
+        "**"
+      ],
+      "exclude": [],
+      "role": "legacy_observation_anchor",
+      "reason": "Accepted generation, finishing, subtitle, and delivery historical observation anchor; hash only, never copy or replay."
+    }
+  ],
+  "test_discovery": {
+    "start_directory": "tests",
+    "pattern": "test_*.py",
+    "top_level_directory": null,
+    "nested_sandbox_test_ids": [
+      "test_prepare_source_blueprint.PrepareSourceBlueprintTest.test_source_task_cannot_write_workspace_state",
+      "test_source_composition_fanout.SourceCompositionFanoutTest.test_cli_builds_and_runs_a_command_only_plan",
+      "test_stage_execution.StageExecutionTest.test_command_packet_can_create_outputs_under_a_new_write_root",
+      "test_stage_execution.StageExecutionTest.test_detached_child_fd_cannot_mutate_promoted_output_inode",
+      "test_stage_execution.StageExecutionTest.test_detached_command_child_cannot_overwrite_canonical_after_promotion",
+      "test_stage_execution.StageExecutionTest.test_sandboxed_command_gets_a_writable_packet_local_temp_directory",
+      "test_stage_execution.StageExecutionTest.test_sandboxed_command_keeps_network_access",
+      "test_stage_execution.StageExecutionTest.test_sandboxed_command_packets_still_run_concurrently"
+    ]
+  },
+  "hard_stops": [
+    "missing required source object",
+    "object classified by multiple selectors",
+    "boundary-escaping symlink",
+    "source changes while hashing",
+    "unsupported filesystem object type"
+  ]
+}

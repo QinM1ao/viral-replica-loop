@@ -1,0 +1,20 @@
+{
+  "id": "fixture-wujie-source-understanding-v1",
+  "object": "chat.completion",
+  "model": "doubao-seed-2-0-mini-260215",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": "{\"summary\":\"A synthetic tabletop product is opened, its texture is shown, and it is wiped once.\",\"story_structure\":[\"open\",\"texture-proof\",\"single-wipe\"],\"people_mode\":\"no_person\",\"timeline\":[{\"start_seconds\":0.0,\"end_seconds\":1.0,\"shot_type\":\"locked close-up\",\"visual_action\":\"open the product\",\"visible_roles\":[],\"expression_and_gaze\":\"\",\"spoken_content\":\"Open it,\",\"speaker_mode\":\"voiceover\",\"visible_text\":[],\"story_function\":\"hook\",\"confidence\":1.0},{\"start_seconds\":1.0,\"end_seconds\":2.5,\"shot_type\":\"locked macro\",\"visual_action\":\"show the texture\",\"visible_roles\":[],\"expression_and_gaze\":\"\",\"spoken_content\":\"show the texture,\",\"speaker_mode\":\"voiceover\",\"visible_text\":[],\"story_function\":\"proof\",\"confidence\":1.0},{\"start_seconds\":2.5,\"end_seconds\":4.0,\"shot_type\":\"locked close-up\",\"visual_action\":\"wipe once\",\"visible_roles\":[],\"expression_and_gaze\":\"\",\"spoken_content\":\"and wipe once.\",\"speaker_mode\":\"voiceover\",\"visible_text\":[],\"story_function\":\"demonstration\",\"confidence\":1.0}],\"characters\":[],\"products_and_props\":[{\"name_or_description\":\"synthetic fixture product\",\"visible_text\":[],\"usage_actions\":[\"open\",\"show texture\",\"wipe once\"]}],\"hard_cuts\":[1.0,2.5],\"action_peaks\":[{\"time_seconds\":0.5,\"description\":\"open proof\"},{\"time_seconds\":1.75,\"description\":\"texture proof\"},{\"time_seconds\":3.25,\"description\":\"wipe proof\"}],\"audio_summary\":{\"speech_style\":\"steady narration with source-locked order\",\"music_and_sfx\":\"no music; light object sounds\"},\"replication_must_keep\":[\"open\",\"texture-proof\",\"single-wipe\"],\"uncertainties\":[]}"
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "total_tokens": 0
+  }
+}

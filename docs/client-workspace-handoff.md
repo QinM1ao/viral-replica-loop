@@ -105,17 +105,17 @@ System tools:
 - `ffmpeg`
 - `ffprobe`
 
-The default `source_blueprint` route also requires the local `.venv-qwen3-asr` environment so exact spoken words can be checked independently from the semantic model. If it is absent, new-job source understanding stops rather than silently replacing transcript evidence with a model guess.
+The default `source_blueprint` route uses ElevenLabs Scribe v1 through the production Wujie Higress endpoint. It does not download or prepare a local ASR model. Setup checks that the same Higress credential used for source-video understanding is configured; the first real transcription verifies the endpoint and authentication. If the credential is absent or rejected, new-job source understanding stops instead of silently replacing transcript evidence with a model guess.
 
 Provider keys:
 
 ```bash
 export MATPOOL_API_KEY="..."
 export MATPOOL_BASE_URL="https://token.matpool.com/v1" # optional default
-export HIGRESS_API_KEY="..." # required Wujie Seed 2.0 Mini source-video understanding
+export HIGRESS_API_KEY="..." # required for Wujie Seed 2.0 Mini and ElevenLabs ASR
 ```
 
-`HIGRESS_API_KEY` may instead be named `WUJIEAI_API_KEY` or `GATEWAY_API_KEY`, and can live in `~/.config/wujieai/env`. The exported workspace uses it before ImageGen to call `doubao-seed-2-0-mini-260215` for required source-video understanding. Seedance generation uses its own configured route and remains a separate paid action; the loop stops before paid generation unless explicitly approved.
+`HIGRESS_API_KEY` may instead be named `WUJIEAI_API_KEY` or `GATEWAY_API_KEY`, and can live in `~/.config/wujieai/env`. Before ImageGen, the workspace uses it for required `doubao-seed-2-0-mini-260215` source-video understanding and `elevenlabs/scribe_v1` transcription. Seedance generation uses its own configured route and remains a separate paid action; the loop stops before paid generation unless explicitly approved.
 
 ## First New Task
 

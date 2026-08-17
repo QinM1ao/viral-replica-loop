@@ -13,9 +13,15 @@ def sha256_file(path):
 
 
 def display_path(root, path):
-    path = Path(path).resolve()
+    root = Path(root).resolve()
+    path = Path(path)
     try:
-        return str(path.relative_to(Path(root).resolve()))
+        return str(path.relative_to(root))
+    except ValueError:
+        pass
+    path = path.resolve()
+    try:
+        return str(path.relative_to(root))
     except ValueError:
         return str(path)
 
@@ -46,14 +52,20 @@ def path_record(path):
 
 def build_input_manifest(root, paths):
     root = Path(root).resolve()
-    resolved = {
-        Path(path).expanduser().resolve()
-        for path in paths
-        if path is not None and str(path).strip()
-    }
+    resolved = {}
+    for raw in paths:
+        if raw is None or not str(raw).strip():
+            continue
+        path = Path(raw).expanduser()
+        if not path.is_absolute():
+            path = root / path
+        resolved.setdefault(path.resolve(), path)
     return {
-        display_path(root, path): path_record(path)
-        for path in sorted(resolved)
+        display_path(root, path): path_record(resolved_path)
+        for resolved_path, path in sorted(
+            resolved.items(),
+            key=lambda item: str(item[0]),
+        )
     }
 
 

@@ -3,6 +3,7 @@
 
 import argparse
 import csv
+import difflib
 import hashlib
 import json
 import math
@@ -10,11 +11,14 @@ import re
 import shutil
 import subprocess
 import sys
-from datetime import datetime
+from contextvars import ContextVar
 from pathlib import Path
 
+from artifact_lifecycle import artifact_replacement_scope, stage_bounded_replacement
+from depth_reference_pack import LONG_EDGE as DEPTH_LONG_EDGE
+from depth_reference_pack import build_depth_reference
 from pre_seedance_part_compiler import MAX_WORKERS as PART_COMPILER_MAX_WORKERS
-from pre_seedance_part_compiler import compile_and_merge
+from pre_seedance_part_compiler import compile_and_merge, validate_compilation_manifest
 from presenter_gender import presenter_gender_text_issues, validate_presenter_gender_pair
 from seedance_request_contract import TASK_CREATE_URL, build_taskcode_request
 from speech_budget import assess_speech_groups, spoken_units
@@ -42,6 +46,11 @@ ROLE_LABELS = {
 }
 SCRIPT_TEXT_SEPARATORS = re.compile(r"[\s，。！？；：、,.!?;:'\"“”‘’（）()《》【】\[\]{}<>—…·-]+")
 IMAGE_REFERENCE_RE = re.compile(r"@图片(\d+)")
+ACTIVE_JOB_DIR = ContextVar("pre_seedance_active_job_dir", default=None)
+DEPTH_REQUEST_RE = re.compile(
+    r"(?:纯灰度)?深度(?:图|视频|动作参考)?|depth(?: reference| video)?",
+    re.IGNORECASE,
+)
 ALLOWED_LINE_EDIT_REASONS = {
     "product_name",
     "product_fact",
@@ -118,9 +127,75 @@ def file_sha256(path):
     return digest.hexdigest()
 
 
+def compilation_fingerprint(root, mode, frozen_inputs):
+    payload = {
+        "version": 1,
+        "handoff_mode": mode,
+        "inputs": [
+            {
+                "path": display_path(root, path),
+                "sha256": file_sha256(path),
+            }
+            for path in frozen_inputs
+        ],
+    }
+    return hashlib.sha256(
+        json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def reusable_compilation(root, job_dir, mode, fingerprint):
+    manifest_path = job_dir / "seedance" / "part_compilation_manifest.json"
+    handoff_path = job_dir / "seedance" / "handoff_mode.json"
+    if not manifest_path.is_file() or not handoff_path.is_file():
+        return False
+    manifest = read_json(manifest_path)
+    handoff = read_json(handoff_path)
+    if (
+        manifest.get("compilation_fingerprint") != fingerprint
+        or handoff.get("handoff_mode") != mode
+        or validate_compilation_manifest(job_dir, manifest_path).get("overall")
+        != "PASS"
+    ):
+        return False
+    for item in manifest.get("projections") or []:
+        path = resolve_path(root, item.get("path"))
+        if (
+            path is None
+            or not path.is_file()
+            or file_sha256(path) != item.get("sha256")
+        ):
+            return False
+    declared = [
+        handoff.get("source_script_fidelity"),
+        handoff.get("source_replication_fidelity"),
+        handoff.get("replication_function_coverage"),
+        handoff.get("web_handoff"),
+        *(handoff.get("api_requests") or []),
+    ]
+    return all(
+        (not raw) or resolve_path(root, raw).exists()
+        for raw in declared
+    )
+
+
 def resolve_path(root, value):
     path = Path(value).expanduser()
-    return path if path.is_absolute() else root / path
+    if path.is_absolute():
+        return path
+    active_job_dir = ACTIVE_JOB_DIR.get()
+    if (
+        active_job_dir is not None
+        and len(path.parts) >= 2
+        and path.parts[:2] == ("output", active_job_dir.parent.name)
+    ):
+        return active_job_dir / Path(*path.parts[2:])
+    return root / path
 
 
 def display_path(root, path):
@@ -811,6 +886,8 @@ def beat_skeleton(duration=DEFAULT_PART_DURATION):
             "source_speaker_mode": "",
             "source_line": "",
             "target_visual_action": "",
+            "expression_cue": "",
+            "expression_cue_source": "",
             "visual_fidelity": {
                 f"{side}_{field}": ""
                 for field in VISUAL_FIDELITY_FIELDS
@@ -909,6 +986,58 @@ def build_plan(root, job_id, handoff_mode):
         "analysis_sha256": file_sha256(source_rhythm_path),
         "source_video_sha256": source_rhythm_payload.get("source_sha256", ""),
     }
+    face_expression_path = (
+        root
+        / "output"
+        / job_id
+        / "剧情分析"
+        / "face_expression"
+        / "face_expression_timeline.json"
+    )
+    face_expression = None
+    if face_expression_path.is_file():
+        face_expression_payload = read_json(face_expression_path)
+        if (
+            face_expression_payload.get("source_sha256")
+            != source_rhythm.get("source_video_sha256")
+        ):
+            raise ValueError(
+                "face expression timeline source does not match source_rhythm"
+            )
+        face_expression = {
+            "path": display_path(root, face_expression_path),
+            "analysis_sha256": file_sha256(face_expression_path),
+            "source_video_sha256": face_expression_payload.get("source_sha256", ""),
+        }
+    expression_profile_path = (
+        root
+        / "output"
+        / job_id
+        / "剧情分析"
+        / "expression_prompt_profile.json"
+    )
+    expression_prompt = None
+    if expression_profile_path.is_file():
+        expression_profile = read_json(expression_profile_path)
+        if (
+            expression_profile.get("source_sha256")
+            != source_rhythm.get("source_video_sha256")
+        ):
+            raise ValueError(
+                "expression prompt profile source does not match source_rhythm"
+            )
+        expression_prompt = {
+            "path": display_path(root, expression_profile_path),
+            "analysis_sha256": file_sha256(expression_profile_path),
+            "source_video_sha256": expression_profile.get("source_sha256", ""),
+            "mode": expression_profile.get("mode"),
+            "people_mode": expression_profile.get("people_mode"),
+            "blink_policy": expression_profile.get("blink_policy"),
+            "budget": expression_profile.get("budget") or {},
+            "natural_blink_fallback": expression_profile.get(
+                "natural_blink_fallback"
+            ),
+        }
     source_duration = source_rhythm_payload.get("duration")
     target_duration = parse_target_duration(job.get("target_duration"))
     compressed = (
@@ -977,30 +1106,49 @@ def build_plan(root, job_id, handoff_mode):
         "asset_roles": asset_roles,
         "parts": parts,
     }
+    depth_enabled = bool(DEPTH_REQUEST_RE.search(str(job.get("notes") or "")))
+    plan["depth_reference"] = {"enabled": False}
+    if depth_enabled:
+        plan["depth_reference"] = {
+            "enabled": True,
+            "source": job.get("video_path", ""),
+            "long_edge": DEPTH_LONG_EDGE,
+            "max_duration_seconds": MAX_AUDIO_SECONDS,
+            "priority": (
+                "@视频1 is the highest-priority action, camera, hard-cut and rhythm template"
+            ),
+            "transfers": [
+                "shot_count_and_order",
+                "hard_cuts",
+                "camera_motion",
+                "subject_and_hand_trajectories",
+                "action_peaks",
+                "end_states",
+            ],
+            "does_not_transfer": [
+                "identity",
+                "product",
+                "clothing",
+                "color",
+                "grayscale_or_depth_map_style",
+            ],
+        }
     plan["source_rhythm"] = source_rhythm
+    if face_expression is not None:
+        plan["face_expression"] = face_expression
+    if expression_prompt is not None:
+        plan["expression_prompt"] = expression_prompt
     return plan
 
 
-def archive_paths(job_dir, paths, prefix):
-    existing = [path for path in paths if path.exists()]
-    if not existing:
-        return None
-    stamp = datetime.now().strftime("%Y%m%dT%H%M%S%f")
-    archive = job_dir / "deprecated" / f"{prefix}_{stamp}"
-    for path in existing:
-        destination = archive / path.relative_to(job_dir)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(path), str(destination))
-    return archive
-
-
+@artifact_replacement_scope
 def init_plan(root, job_id, handoff_mode, replace=False):
     job_dir = root / "output" / job_id
     plan_path = job_dir / "seedance" / "director_plan.json"
     if plan_path.exists() and not replace:
         raise ValueError(f"director plan already exists: {plan_path}; use --replace")
     if replace:
-        archive_paths(job_dir, [plan_path], "director_plan")
+        stage_bounded_replacement(job_dir, [plan_path], "director_plan")
     if handoff_mode == "auto":
         handoff_mode = str(load_job(root, job_id).get("handoff_mode") or "web").strip().lower()
         if handoff_mode not in HANDOFF_MODES:
@@ -1160,6 +1308,104 @@ def source_spoken_beat_count_for_part(part):
     )
 
 
+def expression_cue_length(value):
+    return len(re.sub(r"\s+", "", str(value or "")))
+
+
+def expression_cue_clause_count(value):
+    return len(
+        [
+            item
+            for item in re.split(r"[；;。！？!?]+", str(value or ""))
+            if item.strip()
+        ]
+    )
+
+
+def validate_expression_prompt_budget(plan, parts):
+    expression_prompt = plan.get("expression_prompt")
+    if not isinstance(expression_prompt, dict):
+        return
+    mode = str(expression_prompt.get("mode") or "").strip()
+    budget = expression_prompt.get("budget")
+    if mode not in {"single_person_budgeted", "multi_person_semantic"}:
+        raise ValueError("director plan expression_prompt mode is invalid")
+    if not isinstance(budget, dict):
+        raise ValueError("director plan expression_prompt budget is required")
+    max_chars = int(budget.get("max_chars_per_shot") or 0)
+    max_clauses = int(budget.get("max_clauses_per_shot") or 0)
+    if min(max_chars, max_clauses) <= 0:
+        raise ValueError("director plan expression_prompt budget is invalid")
+    for part in parts:
+        for beat in part.get("beats") or []:
+            cue = str(beat.get("expression_cue") or "").strip()
+            cue_source = str(beat.get("expression_cue_source") or "").strip()
+            if not cue:
+                if cue_source:
+                    raise ValueError(
+                        f"{part['id']} expression_cue_source requires expression_cue"
+                    )
+                continue
+            if not cue_source:
+                raise ValueError(
+                    f"{part['id']} expression_cue requires source evidence"
+                )
+            if expression_cue_length(cue) > max_chars:
+                raise ValueError(
+                    f"{part['id']} expression_cue exceeds {max_chars} characters"
+                )
+            if expression_cue_clause_count(cue) > max_clauses:
+                raise ValueError(
+                    f"{part['id']} expression_cue exceeds {max_clauses} clauses"
+                )
+            if mode == "multi_person_semantic" and re.search(
+                r"眨眼|闭眼|睁眼|眼睑",
+                cue,
+            ):
+                raise ValueError(
+                    f"{part['id']} multi-person expression_cue must omit blink instructions"
+                )
+            if mode == "multi_person_semantic" and not cue_source.startswith(
+                "video_understanding:"
+            ):
+                raise ValueError(
+                    f"{part['id']} multi-person expression_cue must use video_understanding evidence"
+                )
+            if mode == "single_person_budgeted":
+                if not cue_source.startswith(
+                    (
+                        "video_understanding:",
+                        "face_expression:",
+                        "natural_blink_fallback:",
+                        "user_request:",
+                    )
+                ):
+                    raise ValueError(
+                        f"{part['id']} single-person expression_cue source is invalid"
+                    )
+                if cue_source.startswith("natural_blink_fallback:"):
+                    fallback = expression_prompt.get("natural_blink_fallback")
+                    if not isinstance(fallback, dict) or not fallback.get("eligible"):
+                        raise ValueError(
+                            f"{part['id']} natural blink fallback lacks no-blink evidence"
+                        )
+                    expected_source = f"natural_blink_fallback:{beat.get('id')}"
+                    if cue_source != expected_source or "眨眼" not in cue:
+                        raise ValueError(
+                            f"{part['id']} natural blink fallback must bind its current beat"
+                        )
+                max_blink_phrases = int(
+                    budget.get("max_blink_phrases_per_cue") or 0
+                )
+                if (
+                    max_blink_phrases > 0
+                    and len(re.findall(r"眨眼", cue)) > max_blink_phrases
+                ):
+                    raise ValueError(
+                        f"{part['id']} expression_cue repeats blink wording"
+                    )
+
+
 def validate_plan(plan, root=None):
     target_presenter_gender = validate_presenter_gender_pair(plan.get("presenter_gender"))
     gender_issues = presenter_gender_text_issues(
@@ -1169,6 +1415,17 @@ def validate_plan(plan, root=None):
     if gender_issues:
         raise ValueError("director plan has " + "; ".join(gender_issues))
     parts = plan_parts(plan)
+    depth_reference = plan.get("depth_reference") or {}
+    if depth_reference.get("enabled"):
+        if int(depth_reference.get("long_edge") or 0) != DEPTH_LONG_EDGE:
+            raise ValueError(
+                f"depth reference long_edge must be exactly {DEPTH_LONG_EDGE}"
+            )
+        if not str(depth_reference.get("source") or "").strip():
+            raise ValueError(
+                "enabled depth reference requires the original source video"
+            )
+    validate_expression_prompt_budget(plan, parts)
     plan_version = int(plan.get("version", 2))
     if plan_version >= 5:
         script_fidelity = plan.get("script_fidelity")
@@ -1597,11 +1854,14 @@ def model_time_range(first_beat, last_beat):
 
 
 def join_prompt_items(values):
-    items = [
-        str(value).strip().rstrip("。；")
-        for value in values
-        if str(value or "").strip()
-    ]
+    items = []
+    seen = set()
+    for value in values:
+        item = str(value or "").strip().rstrip("。；")
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        items.append(item)
     return "；".join(items) + "。"
 
 
@@ -1867,7 +2127,50 @@ def render_material_roles(job_id, parts, specs_by_part, route, plan):
                 detail.get("exclusions", ""),
             ]
             lines.append("| " + " | ".join(markdown_cell(cell) for cell in cells) + " |")
+        if (plan.get("depth_reference") or {}).get("enabled"):
+            lines.append(
+                "| @视频1 | depth_reference | `depth-reference/"
+                f"{part['id']}_depth_reference.mp4` | 最高优先级动作、机位、硬切和节奏模板 | "
+                "不传递人物、产品、服装、颜色、灰度或浮雕风格 |"
+            )
     return "\n".join(lines)
+
+
+def render_prompt_block(beats, groups, prompt_visual=None):
+    first = beats[0]
+    last = beats[-1]
+    visual = str(prompt_visual or "").strip()
+    if not visual:
+        visual = join_prompt_items(
+            item
+            for beat in beats
+            for item in (
+                beat.get("target_visual_action"),
+                beat.get("expression_cue"),
+            )
+        )
+    sound_effect = join_prompt_items(beat.get("sound_effect") for beat in beats)
+    model_sound_effect = model_sound_effect_text(sound_effect)
+    voice_items = []
+    seen_voice_items = set()
+    for group in groups:
+        item = model_speaker_text(
+            group["speaker_mode"],
+            group["line"],
+            group.get("delivery_note"),
+        ).rstrip("。")
+        if item not in seen_voice_items:
+            seen_voice_items.add(item)
+            voice_items.append(item)
+    voice = "；".join(voice_items) if voice_items else "无台词"
+    block_lines = [
+        f"{model_time_range(first, last)}｜{model_shot_range(first['panel_start'], last['panel_end'])}",
+        f"画面：{visual}",
+        f"声音：{voice.rstrip('。')}。",
+    ]
+    if model_sound_effect:
+        block_lines.append(f"音效：{model_sound_effect}")
+    return "\n".join(block_lines)
 
 
 def render_prompt(plan, part, specs_by_part, route):
@@ -1884,6 +2187,12 @@ def render_prompt(plan, part, specs_by_part, route):
             if item
         )
         lines.append(f"@图片{index}{description}。")
+    if (plan.get("depth_reference") or {}).get("enabled"):
+        lines.append(
+            "@视频1定义为最高优先级动作、机位、硬切和节奏模板；"
+            "只控制Shot数量与顺序、硬切、完整轨迹、动作峰值和终态；"
+            "不传递人物、产品、服装、颜色、灰度或深度浮雕风格。"
+        )
     audio_rule = str(plan.get("audio_prompt_rule", "")).strip()
     part_audio = part.get("audio") or {}
     if audio_rule and part_audio.get("source_start") is not None:
@@ -1901,34 +2210,126 @@ def render_prompt(plan, part, specs_by_part, route):
             global_rules,
         ]
     )
-    for beats, groups in prompt_blocks(part):
-        first = beats[0]
-        last = beats[-1]
-        visual = join_prompt_items(beat.get("target_visual_action") for beat in beats)
-        sound_effect = join_prompt_items(beat.get("sound_effect") for beat in beats)
-        model_sound_effect = model_sound_effect_text(sound_effect)
-        voice = (
-            "；".join(
-                model_speaker_text(
-                    group["speaker_mode"],
-                    group["line"],
-                    group.get("delivery_note"),
-                ).rstrip("。")
-                for group in groups
-            )
-            if groups
-            else "无台词"
+    blocks = part.get("execution_blocks") or []
+    for index, (beats, groups) in enumerate(prompt_blocks(part)):
+        block = blocks[index] if blocks else {}
+        lines.extend(
+            [
+                "",
+                render_prompt_block(
+                    beats,
+                    groups,
+                    block.get("prompt_visual"),
+                ),
+            ]
         )
-        block_lines = [
-            "",
-            f"{model_time_range(first, last)}｜{model_shot_range(first['panel_start'], last['panel_end'])}",
-            f"画面：{visual}",
-            f"声音：{voice.rstrip('。')}。",
-        ]
-        if model_sound_effect:
-            block_lines.append(f"音效：{model_sound_effect}")
-        lines.extend(block_lines)
     return "\n".join(lines)
+
+
+@artifact_replacement_scope
+def patch_prompt_only(job_dir, part_id, block_id, visual):
+    job_dir = Path(job_dir).expanduser().resolve()
+    plan_path = job_dir / "seedance" / "director_plan.json"
+    if not plan_path.is_file():
+        raise FileNotFoundError(f"missing director plan: {plan_path}")
+    plan = read_json(plan_path)
+    part = next(
+        (item for item in plan.get("parts") or [] if item.get("id") == part_id),
+        None,
+    )
+    if part is None:
+        raise ValueError(f"director plan has no Part: {part_id}")
+    block = next(
+        (
+            item
+            for item in part.get("execution_blocks") or []
+            if item.get("id") == block_id
+        ),
+        None,
+    )
+    if block is None:
+        raise ValueError(f"{part_id} has no execution block: {block_id}")
+    beat_by_id = {beat["id"]: beat for beat in part.get("beats") or []}
+    beats = [beat_by_id[beat_id] for beat_id in block.get("beat_ids") or []]
+    groups = [
+        group
+        for group in part.get("speech_groups") or []
+        if set(group.get("beat_ids") or []).issubset(set(block["beat_ids"]))
+    ]
+    old_block = render_prompt_block(beats, groups, block.get("prompt_visual"))
+
+    label = part_label(part_id)
+    prompt_paths = [
+        job_dir / "seedance" / f"seedance_{part_id}_prompt.txt",
+        job_dir / "seedance_web_final" / "prompts" / f"{label}_Seedance_prompt.txt",
+        job_dir
+        / "seedance_web_final"
+        / f"{label}_上传素材"
+        / f"00_{label}_Seedance_prompt.txt",
+    ]
+    existing_prompt_paths = [path for path in prompt_paths if path.is_file()]
+    if not existing_prompt_paths:
+        raise FileNotFoundError(f"missing rendered prompt for {part_id}")
+    baselines = {path: path.read_text(encoding="utf-8") for path in existing_prompt_paths}
+    if len(set(baselines.values())) != 1:
+        raise ValueError(f"{part_id} prompt copies are not synchronized")
+    before = next(iter(baselines.values()))
+    if before.count(old_block) != 1:
+        raise ValueError(
+            f"{part_id}/{block_id} baseline does not match director plan"
+        )
+
+    non_target_prompts = {
+        path: path.read_bytes()
+        for path in job_dir.rglob("*prompt.txt")
+        if path not in existing_prompt_paths
+    }
+    block["prompt_visual"] = str(visual).strip().rstrip("。；") + "。"
+    new_block = render_prompt_block(beats, groups, block["prompt_visual"])
+    after = before.replace(old_block, new_block, 1)
+    if after == before:
+        raise ValueError("replacement content did not change the target block")
+
+    report_path = job_dir / "seedance" / "prompt_patch_report.json"
+    diff_path = job_dir / "seedance" / "prompt_patch.diff"
+    stage_bounded_replacement(
+        job_dir,
+        [plan_path, *existing_prompt_paths, report_path, diff_path],
+        "prompt_only",
+    )
+    write_json(plan_path, plan)
+    for path in existing_prompt_paths:
+        write_text(path, after)
+    non_target_unchanged = all(
+        path.is_file() and path.read_bytes() == payload
+        for path, payload in non_target_prompts.items()
+    )
+    if not non_target_unchanged:
+        raise RuntimeError("a non-target prompt changed during prompt-only patch")
+    diff = "".join(
+        difflib.unified_diff(
+            before.splitlines(keepends=True),
+            after.splitlines(keepends=True),
+            fromfile=f"{part_id}.baseline",
+            tofile=f"{part_id}.patched",
+        )
+    )
+    write_text(diff_path, diff)
+    write_json(
+        report_path,
+        {
+            "schema_version": 1,
+            "mode": "prompt_only",
+            "job_dir": str(job_dir),
+            "changed_parts": [part_id],
+            "changed_blocks": [f"{part_id}/{block_id}"],
+            "before_sha256": hashlib.sha256(before.encode("utf-8")).hexdigest(),
+            "after_sha256": hashlib.sha256(after.encode("utf-8")).hexdigest(),
+            "non_target_prompts_byte_identical": non_target_unchanged,
+            "diff": str(diff_path),
+        },
+    )
+    return report_path
 
 
 def managed_outputs(job_dir, parts):
@@ -1964,6 +2365,102 @@ def prepare_audio(root, job_dir, parts):
         if not output.is_file():
             raise RuntimeError(f"ffmpeg did not create audio output: {output}")
         outputs[part["id"]] = output
+    return outputs
+
+
+def part_source_interval(part):
+    starts = [
+        float(beat["source_start"])
+        for beat in part.get("beats") or []
+        if beat.get("source_start") is not None
+    ]
+    ends = [
+        float(beat["source_end"])
+        for beat in part.get("beats") or []
+        if beat.get("source_end") is not None
+    ]
+    if not starts or not ends or max(ends) <= min(starts):
+        raise ValueError(
+            f"{part.get('id')} depth reference requires a source interval"
+        )
+    return min(starts), max(ends)
+
+
+def prepare_depth_outputs(root, job_dir, plan, parts):
+    config = plan.get("depth_reference") or {}
+    if not config.get("enabled"):
+        return {}
+    source = resolve_path(root, config["source"])
+    if not source.is_file():
+        raise FileNotFoundError(
+            f"missing original source for depth reference: {source}"
+        )
+    long_edge = int(config.get("long_edge") or 0)
+    if long_edge != DEPTH_LONG_EDGE:
+        raise ValueError(
+            f"depth reference long_edge must be exactly {DEPTH_LONG_EDGE}"
+        )
+    source_hash = file_sha256(source)
+    outputs = {}
+    reports = []
+    for part in parts:
+        source_start, source_end = part_source_interval(part)
+        target_duration = min(
+            part_duration_seconds(part),
+            float(config.get("max_duration_seconds") or MAX_AUDIO_SECONDS),
+        )
+        output = (
+            job_dir / "depth-reference" / f"{part['id']}_depth_reference.mp4"
+        )
+        evidence = (
+            job_dir / "depth-reference" / f"{part['id']}_depth_reference.json"
+        )
+        reusable = False
+        if output.is_file() and evidence.is_file():
+            current = read_json(evidence)
+            reusable = (
+                current.get("overall") == "PASS"
+                and current.get("source_sha256") == source_hash
+                and current.get("source_interval") == [source_start, source_end]
+                and current.get("long_edge") == long_edge
+                and abs(
+                    float(current.get("duration_seconds") or 0) - target_duration
+                )
+                <= 0.10
+                and current.get("output_sha256") == file_sha256(output)
+            )
+        if reusable:
+            report = current
+        else:
+            report = {
+                "overall": "PASS",
+                **build_depth_reference(
+                    source,
+                    output,
+                    source_start=source_start,
+                    source_end=source_end,
+                    target_duration=target_duration,
+                    long_edge=long_edge,
+                ),
+            }
+            write_json(evidence, report)
+        outputs[part["id"]] = output
+        reports.append({"part": part["id"], **report})
+    write_json(
+        job_dir / "depth-reference" / "depth_reference_manifest.json",
+        {
+            "schema_version": 1,
+            "job_id": plan.get("job", {}).get("id"),
+            "overall": "PASS",
+            "long_edge": DEPTH_LONG_EDGE,
+            "rule": {
+                "priority": config.get("priority"),
+                "transfers": config.get("transfers") or [],
+                "does_not_transfer": config.get("does_not_transfer") or [],
+            },
+            "parts": reports,
+        },
+    )
     return outputs
 
 
@@ -2007,7 +2504,14 @@ def copy_web_handoff(root, job_dir, job_id, parts, specs_by_part, prompts, audio
     return final_dir
 
 
-def write_web_part(final_dir, part, specs, prompt, audio_output):
+def write_web_part(
+    final_dir,
+    part,
+    specs,
+    prompt,
+    audio_output,
+    depth_output=None,
+):
     prompt_dir = final_dir / "prompts"
     label = part_label(part["id"])
     part_dir = final_dir / f"{label}_上传素材"
@@ -2017,10 +2521,15 @@ def write_web_part(final_dir, part, specs, prompt, audio_output):
     write_text(local_prompt, prompt)
     uploads = []
     for index, role, source in indexed_asset_specs(specs):
-        upload_index = index if index <= 5 else index + 1
+        reserved_slots = 1 + int(depth_output is not None)
+        upload_index = index if index <= 5 else index + reserved_slots
         destination = part_dir / f"{upload_index:02d}_{label}_{role_label(role)}{source.suffix.lower()}"
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, destination)
+        uploads.append(destination.relative_to(final_dir).as_posix())
+    if depth_output is not None:
+        destination = part_dir / f"07_{label}_纯灰度深度动作参考.mp4"
+        shutil.copy2(depth_output, destination)
         uploads.append(destination.relative_to(final_dir).as_posix())
     if audio_output is not None:
         destination = part_dir / f"06_{label}_声音参考.mp3"
@@ -2093,7 +2602,16 @@ def write_api_requests(root, job_dir, job_id, parts, specs_by_part, prompts, aud
     return request_paths
 
 
-def build_api_request(root, job_dir, part, specs, prompt, has_audio, route):
+def build_api_request(
+    root,
+    job_dir,
+    part,
+    specs,
+    prompt,
+    has_audio,
+    route,
+    has_depth=False,
+):
     content = [{"type": "text", "text": prompt}]
     for index, role, _source in indexed_asset_specs(specs):
         content.append(
@@ -2101,6 +2619,20 @@ def build_api_request(root, job_dir, part, specs, prompt, has_audio, route):
                 "type": "image_url",
                 "image_url": {"url": asset_placeholder(part["id"], index, role)},
                 "role": "reference_image",
+            }
+        )
+    if has_depth:
+        content.append(
+            {
+                "type": "video_url",
+                "video_url": {
+                    "url": asset_placeholder(
+                        part["id"],
+                        1,
+                        "depth_reference",
+                    )
+                },
+                "role": "reference_video",
             }
         )
     if has_audio:
@@ -2149,6 +2681,7 @@ def compile_part_packet(
     route,
     mode,
     packet_dir,
+    depth_output=None,
     audio_runner=None,
 ):
     prompt = render_prompt(plan, part, {part["id"]: specs}, route)
@@ -2180,6 +2713,11 @@ def compile_part_packet(
         ),
         "web_uploads": [],
         "request_path": None,
+        "depth_source": (
+            display_path(root, depth_output)
+            if depth_output is not None
+            else None
+        ),
     }
     if mode in ("web", "both"):
         metadata["web_uploads"] = write_web_part(
@@ -2188,6 +2726,7 @@ def compile_part_packet(
             specs,
             prompt,
             audio_output,
+            depth_output,
         )
     if mode in ("api", "both"):
         request_path = (
@@ -2206,14 +2745,30 @@ def compile_part_packet(
                 prompt,
                 audio_output is not None,
                 route,
+                depth_output is not None,
             ),
         )
         metadata["request_path"] = request_path.relative_to(packet_dir).as_posix()
     return metadata
 
 
-def render_plan(root, job_id, handoff_mode=None, replace=False):
-    job_dir = root / "output" / job_id
+@artifact_replacement_scope
+def _render_plan(root, job_id, handoff_mode=None, replace=False, job_dir=None):
+    explicit_job_dir = job_dir is not None
+    job_dir = (
+        Path(job_dir).expanduser().resolve()
+        if job_dir is not None
+        else root / "output" / job_id
+    )
+    if explicit_job_dir and (
+        job_dir.name != "work"
+        or job_dir.parent.name != job_id
+        or job_dir.parent.parent.name != "jobs"
+        or job_dir.parents[2] != root.resolve()
+    ):
+        raise ValueError(
+            "canonical --job-dir must be <root>/jobs/<job-id>/work"
+        )
     plan_path = job_dir / "seedance" / "director_plan.json"
     if not plan_path.exists():
         raise FileNotFoundError(f"missing director plan: {plan_path}; run init first")
@@ -2241,6 +2796,73 @@ def render_plan(root, job_id, handoff_mode=None, replace=False):
         source_rhythm_payload = read_json(source_rhythm_path)
         if int(source_rhythm_payload.get("schema_version") or 0) < 3:
             raise ValueError("source_rhythm.json schema_version must be at least 3")
+        face_expression_binding = plan.get("face_expression")
+        face_expression_path = None
+        if face_expression_binding is not None:
+            if not isinstance(face_expression_binding, dict):
+                raise ValueError("director plan face_expression binding is invalid")
+            face_expression_path = resolve_path(
+                root, face_expression_binding.get("path", "")
+            )
+            if not face_expression_path.is_file():
+                raise FileNotFoundError(
+                    f"face expression timeline is required for render: {face_expression_path}"
+                )
+            if file_sha256(face_expression_path) != str(
+                face_expression_binding.get("analysis_sha256", "")
+            ):
+                raise ValueError("director plan face_expression binding is stale")
+            face_expression_payload = read_json(face_expression_path)
+            if (
+                face_expression_payload.get("source_sha256")
+                != source_rhythm_payload.get("source_sha256")
+            ):
+                raise ValueError(
+                    "director plan face_expression source does not match source_rhythm"
+                )
+        expression_prompt_binding = plan.get("expression_prompt")
+        expression_prompt_path = None
+        if expression_prompt_binding is not None:
+            if not isinstance(expression_prompt_binding, dict):
+                raise ValueError(
+                    "director plan expression_prompt binding is invalid"
+                )
+            expression_prompt_path = resolve_path(
+                root, expression_prompt_binding.get("path", "")
+            )
+            if not expression_prompt_path.is_file():
+                raise FileNotFoundError(
+                    "expression prompt profile is required for render: "
+                    f"{expression_prompt_path}"
+                )
+            if file_sha256(expression_prompt_path) != str(
+                expression_prompt_binding.get("analysis_sha256", "")
+            ):
+                raise ValueError(
+                    "director plan expression_prompt binding is stale"
+                )
+            expression_prompt_payload = read_json(expression_prompt_path)
+            if (
+                expression_prompt_payload.get("source_sha256")
+                != source_rhythm_payload.get("source_sha256")
+            ):
+                raise ValueError(
+                    "director plan expression_prompt source does not match source_rhythm"
+                )
+            for field in (
+                "mode",
+                "people_mode",
+                "blink_policy",
+                "budget",
+                "natural_blink_fallback",
+            ):
+                if expression_prompt_binding.get(field) != (
+                    expression_prompt_payload.get(field)
+                ):
+                    raise ValueError(
+                        "director plan expression_prompt binding does not match "
+                        f"profile field {field}"
+                    )
 
     parts = validate_plan(plan, root)
     manifest_path, manifest = load_manifest(root, job_id, plan)
@@ -2264,12 +2886,67 @@ def render_plan(root, job_id, handoff_mode=None, replace=False):
             if not source.is_file():
                 raise FileNotFoundError(f"missing audio source for {part['id']}: {source}")
 
+    frozen_inputs = [
+        plan_path,
+        manifest_path,
+        route_path,
+        job_dir / "product_profile.json",
+    ]
+    if int(plan.get("version") or 0) >= 6:
+        frozen_inputs.append(source_rhythm_path)
+        if face_expression_path is not None:
+            frozen_inputs.append(face_expression_path)
+        if expression_prompt_path is not None:
+            frozen_inputs.append(expression_prompt_path)
+    for specs in specs_by_part.values():
+        frozen_inputs.extend(source for _role, source in specs)
+    for part in parts:
+        audio = part.get("audio") or {}
+        if audio.get("source_start") is not None:
+            frozen_inputs.append(resolve_path(root, audio["source"]))
+    depth_config = plan.get("depth_reference") or {}
+    if depth_config.get("enabled"):
+        depth_source = resolve_path(root, depth_config.get("source", ""))
+        if not depth_source.is_file():
+            raise FileNotFoundError(
+                f"missing original source for depth reference: {depth_source}"
+            )
+        frozen_inputs.append(depth_source)
+    deduplicated_frozen_inputs = []
+    seen_frozen_inputs = set()
+    for path in frozen_inputs:
+        resolved = path.resolve()
+        if resolved in seen_frozen_inputs:
+            continue
+        seen_frozen_inputs.add(resolved)
+        deduplicated_frozen_inputs.append(path)
+    frozen_inputs = deduplicated_frozen_inputs
+    compile_fingerprint = compilation_fingerprint(root, mode, frozen_inputs)
+
     existing = [path for path in managed_outputs(job_dir, parts) if path.exists()]
+    if existing and reusable_compilation(
+        root,
+        job_dir,
+        mode,
+        compile_fingerprint,
+    ):
+        return job_dir / "seedance" / "handoff_mode.json"
     if existing and not replace:
         joined = ", ".join(str(path) for path in existing)
         raise ValueError(f"rendered output already exists: {joined}; use --replace")
     if replace:
-        archive_paths(job_dir, managed_outputs(job_dir, parts), "pre_seedance_pack")
+        stage_bounded_replacement(
+            job_dir,
+            managed_outputs(job_dir, parts),
+            "pre_seedance_pack",
+        )
+
+    depth_outputs = prepare_depth_outputs(root, job_dir, plan, parts)
+    frozen_inputs.extend(depth_outputs.values())
+    if depth_outputs:
+        frozen_inputs.append(
+            job_dir / "depth-reference" / "depth_reference_manifest.json"
+        )
 
     write_text(job_dir / "voiceover" / "voiceover.md", render_voiceover(job_id, parts))
     write_text(
@@ -2290,16 +2967,6 @@ def render_plan(root, job_id, handoff_mode=None, replace=False):
         job_dir / "seedance" / "seedance_素材角色表.md",
         render_material_roles(job_id, parts, specs_by_part, route, plan),
     )
-    frozen_inputs = [plan_path, manifest_path, route_path]
-    if int(plan.get("version") or 0) >= 6:
-        frozen_inputs.append(source_rhythm_path)
-    for specs in specs_by_part.values():
-        frozen_inputs.extend(source for _role, source in specs)
-    for part in parts:
-        audio = part.get("audio") or {}
-        if audio.get("source_start") is not None:
-            frozen_inputs.append(resolve_path(root, audio["source"]))
-    frozen_inputs = list(dict.fromkeys(path.resolve() for path in frozen_inputs))
     parts_by_id = {part["id"]: part for part in parts}
     compiled_parts = compile_and_merge(
         job_dir,
@@ -2313,6 +2980,7 @@ def render_plan(root, job_id, handoff_mode=None, replace=False):
             route,
             mode,
             packet_dir,
+            depth_outputs.get(part_id),
         ),
         max_workers=PART_COMPILER_MAX_WORKERS,
         frozen_inputs=frozen_inputs,
@@ -2320,6 +2988,7 @@ def render_plan(root, job_id, handoff_mode=None, replace=False):
     compiler_manifest = {
         "version": 1,
         "job_id": job_id,
+        "compilation_fingerprint": compile_fingerprint,
         "director_plan": display_path(root, plan_path),
         "director_plan_sha256": file_sha256(plan_path),
         "frozen_inputs": [
@@ -2396,11 +3065,60 @@ def render_plan(root, job_id, handoff_mode=None, replace=False):
         "web_handoff": display_path(root, web_dir) if web_dir else None,
         "api_requests": [display_path(root, path) for path in request_paths],
         "audio_parts": sorted(audio_outputs, key=part_number),
+        "depth_parts": sorted(depth_outputs, key=part_number),
         "model_route": route,
     }
     handoff_path = job_dir / "seedance" / "handoff_mode.json"
     write_json(handoff_path, handoff)
+    projection_paths = [
+        job_dir / "voiceover" / "voiceover.md",
+        job_dir / "voiceover" / "source_script_fidelity.md",
+        job_dir / "voiceover" / "source_replication_fidelity.md",
+        job_dir / "voiceover" / "shot_line_map.md",
+        job_dir / "voiceover" / "replication_function_coverage.md",
+        job_dir / "seam" / "seam_design.md",
+        job_dir / "seedance" / "seedance_素材角色表.md",
+        job_dir / "audio-boundary" / "audio_boundary_qc.md",
+        handoff_path,
+    ]
+    if depth_outputs:
+        projection_paths.extend(
+            [
+                job_dir / "depth-reference" / "depth_reference_manifest.json",
+                *depth_outputs.values(),
+            ]
+        )
+    compiler_manifest["projections"] = [
+        {
+            "path": display_path(root, path),
+            "sha256": file_sha256(path),
+        }
+        for path in projection_paths
+    ]
+    write_json(
+        job_dir / "seedance" / "part_compilation_manifest.json",
+        compiler_manifest,
+    )
     return handoff_path
+
+
+def render_plan(root, job_id, handoff_mode=None, replace=False, job_dir=None):
+    active_job_dir = (
+        root / "output" / job_id
+        if job_dir is None
+        else Path(job_dir).expanduser().resolve()
+    )
+    token = ACTIVE_JOB_DIR.set(active_job_dir)
+    try:
+        return _render_plan(
+            root,
+            job_id,
+            handoff_mode,
+            replace,
+            job_dir,
+        )
+    finally:
+        ACTIVE_JOB_DIR.reset(token)
 
 
 def add_common_arguments(parser):
@@ -2417,18 +3135,42 @@ def parse_args(argv=None):
     init_parser.add_argument("--handoff-mode", choices=INIT_HANDOFF_MODES, default="auto")
     render_parser = subparsers.add_parser("render", help="validate and mechanically render the plan")
     add_common_arguments(render_parser)
+    render_parser.add_argument("--job-dir", type=Path)
     render_parser.add_argument("--handoff-mode", choices=HANDOFF_MODES)
+    prompt_parser = subparsers.add_parser(
+        "prompt-only",
+        help="patch one rendered execution block without rebuilding media or QC",
+    )
+    prompt_parser.add_argument("--job-dir", type=Path, required=True)
+    prompt_parser.add_argument("--part-id", required=True)
+    prompt_parser.add_argument("--block-id", required=True)
+    prompt_parser.add_argument("--visual", required=True)
     return parser, parser.parse_args(argv)
 
 
 def main(argv=None):
     parser, args = parse_args(argv)
-    root = args.root.expanduser().resolve()
     try:
+        if args.command == "prompt-only":
+            output = patch_prompt_only(
+                args.job_dir,
+                args.part_id,
+                args.block_id,
+                args.visual,
+            )
+            print(output)
+            return 0
+        root = args.root.expanduser().resolve()
         if args.command == "init":
             output = init_plan(root, args.job_id, args.handoff_mode, args.replace)
         else:
-            output = render_plan(root, args.job_id, args.handoff_mode, args.replace)
+            output = render_plan(
+                root,
+                args.job_id,
+                args.handoff_mode,
+                args.replace,
+                args.job_dir,
+            )
     except (FileNotFoundError, ValueError, KeyError, json.JSONDecodeError, subprocess.CalledProcessError) as exc:
         parser.error(str(exc))
     print(display_path(root, output))

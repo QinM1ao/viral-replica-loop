@@ -1,0 +1,5 @@
+.env
+host.env
+logs/
+patches/
+worktrees/

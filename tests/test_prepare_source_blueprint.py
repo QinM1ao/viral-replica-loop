@@ -18,7 +18,19 @@ def write_fake_video_understanding(story_dir, include_hook=True):
         "status": "PASS",
         "provider": config["provider"],
         "model": config["model"],
-        "analysis": {"summary": "source story", "timeline": []},
+        "analysis": {
+            "summary": "source story",
+            "people_mode": "single_primary",
+            "characters": [{"role": "presenter"}],
+            "timeline": [
+                {
+                    "start_seconds": 0.0,
+                    "end_seconds": 1.0,
+                    "visible_roles": ["presenter"],
+                    "expression_and_gaze": "自然看向镜头，眉眼放松",
+                }
+            ],
+        },
     }
     (understanding_dir / "analysis.json").write_text(
         json.dumps(analysis), encoding="utf-8"
@@ -79,7 +91,142 @@ def write_fake_video_understanding(story_dir, include_hook=True):
         )
 
 
+def write_fake_face_expression(face_dir):
+    config = prepare_source_blueprint.blueprint_parameters(30)["face_expression"]
+    face_dir.mkdir(parents=True)
+    (face_dir / "face_expression_timeline.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "detector": {
+                    "name": config["detector"],
+                    "model_sha256": config["model_sha256"],
+                },
+                "face_detection_coverage": 0.0,
+                "eye_events": [],
+                "frames": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (face_dir / "frame_metrics.csv").write_text("frame,time_seconds\n", encoding="utf-8")
+    (face_dir / "eye_closure_curve.png").write_bytes(b"curve")
+    (face_dir / "face_expression_contact_sheet.jpg").write_bytes(b"sheet")
+
+
+def write_fake_asr(
+    story_dir,
+    text="黑头闭口涂油皮粉丝涂。",
+    source_sha256=None,
+    source_path=None,
+):
+    asr_dir = story_dir / "asr"
+    asr_dir.mkdir(exist_ok=True)
+    transcription_id = "fixture-transcript"
+    word = {
+        "text": text,
+        "start": 0.1,
+        "end": 1.9,
+        "type": "word",
+        "speaker_id": "speaker_0",
+    }
+    raw_path = asr_dir / "elevenlabs_scribe_v1.json"
+    timeline_path = asr_dir / "asr_timeline.json"
+    raw_path.write_text(
+        json.dumps({"text": text, "words": [word], "transcription_id": transcription_id}),
+        encoding="utf-8",
+    )
+    timeline_path.write_text(
+        json.dumps(
+            {
+                "provider": "elevenlabs",
+                "model": "scribe_v1",
+                "transcription_id": transcription_id,
+                "audio_duration_secs": 2.0,
+                "words": [word],
+                "speaker_turns": [
+                    {
+                        "speaker_id": "speaker_0",
+                        "start": 0.1,
+                        "end": 1.9,
+                        "text": text,
+                    }
+                ],
+                "sentence_segments": [
+                    {
+                        "speaker_id": "speaker_0",
+                        "start": 0.1,
+                        "end": 1.9,
+                        "text": text,
+                    }
+                ],
+                "audio_events": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    config = prepare_source_blueprint.blueprint_parameters(30)["asr"]
+    (asr_dir / "request_manifest.json").write_text(
+        json.dumps(
+            {
+                "provider": config["provider"],
+                "endpoint": config["endpoint"],
+                "model": config["model"],
+                "http_status": 200,
+                "transcription_id": transcription_id,
+                "source_sha256": source_sha256,
+                "source": source_path,
+                "raw_response_sha256": prepare_source_blueprint.sha256_file(raw_path),
+                "timeline_sha256": prepare_source_blueprint.sha256_file(timeline_path),
+            }
+        ),
+        encoding="utf-8",
+    )
+    (asr_dir / "原口播ASR_elevenlabs.md").write_text(
+        f"# ASR\n\n## Full Text\n\n{text}\n\n## Speaker Turns\n",
+        encoding="utf-8",
+    )
+
+
+def write_fake_expression_profile(story_dir, source_sha256):
+    (story_dir / "expression_prompt_profile.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "source_sha256": source_sha256,
+                "mode": "single_person_budgeted",
+                "people_mode": "single_primary",
+                "blink_policy": "budgeted",
+                "budget": {
+                    "max_chars_per_shot": 36,
+                    "max_clauses_per_shot": 3,
+                    "max_blink_phrases_per_cue": 1,
+                },
+                "semantic_timeline": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 class PrepareSourceBlueprintTest(unittest.TestCase):
+    def test_canonical_job_uses_workspace_managed_runtime(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "workspace"
+            output_dir = workspace / "jobs" / "job-001" / "work"
+            output_dir.mkdir(parents=True)
+            (workspace / "workspace.yaml").write_text(
+                "schema_version: 1\nworkspace_kind: viral-replica\n",
+                encoding="utf-8",
+            )
+
+            runtime_root = prepare_source_blueprint.resolve_runtime_root(output_dir)
+
+            self.assertEqual(
+                runtime_root,
+                (workspace / ".viral-replica" / "runtime").resolve(),
+            )
+
     def test_duration_parsing(self):
         cases = {
             "30s": 30,
@@ -177,6 +324,23 @@ class PrepareSourceBlueprintTest(unittest.TestCase):
             any("video_understanding/hook_review/analysis.json" in error for error in errors),
             errors,
         )
+
+    def test_blueprint_validation_rejects_tampered_asr_timeline(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            story_dir = root / "story_analysis"
+            story_dir.mkdir(parents=True)
+            write_fake_asr(story_dir)
+            (story_dir / "asr" / "asr_timeline.json").write_text(
+                "{}\n", encoding="utf-8"
+            )
+
+            errors = prepare_source_blueprint.validate_generated_artifacts(
+                root,
+                prepare_source_blueprint.blueprint_parameters(30),
+            )
+
+        self.assertIn("ASR timeline hash does not match request manifest", errors)
 
     def test_blueprint_validation_rejects_a_non_rapid_hook_result(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -333,6 +497,28 @@ class PrepareSourceBlueprintTest(unittest.TestCase):
             parameters,
         )
 
+    def test_commands_prepare_native_fps_face_expression_once(self):
+        parameters = prepare_source_blueprint.blueprint_parameters(30)
+        commands = prepare_source_blueprint.build_commands(
+            Path("/tmp/source.mp4"),
+            Path("/tmp/source-blueprint"),
+            parameters,
+        )
+
+        command = commands["prepare_face_expression"]
+        self.assertIn("run_face_expression_detector.py", " ".join(command))
+        self.assertNotIn(
+            "tools/detect_face_expression.py",
+            " ".join(command),
+        )
+        self.assertEqual(
+            command[command.index("--out-dir") + 1],
+            (
+                "/tmp/source-blueprint/prepare_face_expression/"
+                "face_expression"
+            ),
+        )
+
         self.assertIn("prepare_source_rhythm", commands)
         rhythm_command = commands["prepare_source_rhythm"]
         self.assertIn("prepare_source_rhythm.py", " ".join(rhythm_command))
@@ -342,6 +528,125 @@ class PrepareSourceBlueprintTest(unittest.TestCase):
                 "/tmp/source-blueprint/prepare_source_rhythm/"
                 "source_rhythm/source_rhythm.json"
             ),
+        )
+
+    def test_runtime_failure_stops_before_parallel_source_tasks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            video = root / "source.mp4"
+            video.write_bytes(b"source")
+            with mock.patch.object(
+                prepare_source_blueprint,
+                "prepare_face_expression_runtime",
+                side_effect=RuntimeError("project runtime missing"),
+            ), mock.patch.object(
+                prepare_source_blueprint,
+                "run_parallel_tasks",
+                side_effect=AssertionError("parallel tasks must not start"),
+            ):
+                report = prepare_source_blueprint.prepare_blueprint(
+                    video=video,
+                    output_dir=root / "output" / "job-001",
+                    target_duration="5s",
+                    cache_dir=root / "cache",
+                )
+
+        self.assertEqual(report["overall"], "FAIL")
+        self.assertIn("project runtime missing", report["errors"][0])
+
+    def test_single_person_profile_binds_detector_and_limits_cue_wording(self):
+        policy = {
+            "single_person": {
+                "max_chars_per_shot": 36,
+                "max_clauses_per_shot": 3,
+                "max_blink_phrases_per_cue": 1,
+                "no_blink_fallback": {
+                    "enabled": True,
+                    "min_face_detection_coverage": 0.8,
+                    "cue_source_prefix": "natural_blink_fallback:",
+                },
+            },
+            "multi_person": {
+                "max_chars_per_shot": 24,
+                "max_clauses_per_shot": 2,
+                "blink_policy": "omit",
+            },
+        }
+        analysis = {
+            "people_mode": "single_primary",
+            "characters": [{"role": "presenter"}],
+            "timeline": [
+                {
+                    "start_seconds": 0.0,
+                    "end_seconds": 1.0,
+                    "visible_roles": ["presenter"],
+                    "expression_and_gaze": "自然看向镜头，眉眼放松",
+                }
+            ],
+        }
+        profile = prepare_source_blueprint.build_expression_prompt_profile(
+            analysis,
+            source_sha256="a" * 64,
+            policy=policy,
+            detector_binding={"path": "face_expression_timeline.json", "sha256": "b" * 64},
+            detector_summary={
+                "face_detection_coverage": 1.0,
+                "eye_events": [],
+            },
+        )
+
+        self.assertEqual(profile["mode"], "single_person_budgeted")
+        self.assertEqual(profile["budget"]["max_chars_per_shot"], 36)
+        self.assertEqual(
+            profile["detector_timeline"]["path"],
+            "face_expression_timeline.json",
+        )
+        self.assertEqual(len(profile["semantic_timeline"]), 1)
+        self.assertTrue(profile["natural_blink_fallback"]["eligible"])
+        self.assertEqual(
+            profile["natural_blink_fallback"]["reliable_blink_event_count"],
+            0,
+        )
+
+    def test_multi_person_profile_uses_existing_understanding_and_ignores_detector(self):
+        policy = {
+            "single_person": {
+                "max_chars_per_shot": 36,
+                "max_clauses_per_shot": 3,
+                "max_blink_phrases_per_cue": 1,
+            },
+            "multi_person": {
+                "max_chars_per_shot": 24,
+                "max_clauses_per_shot": 2,
+                "blink_policy": "omit",
+            },
+        }
+        analysis = {
+            "people_mode": "multi_person",
+            "characters": [{"role": "host"}, {"role": "guest"}],
+            "timeline": [
+                {
+                    "start_seconds": 0.0,
+                    "end_seconds": 1.0,
+                    "visible_roles": ["host", "guest"],
+                    "expression_and_gaze": "两人自然对视，来宾轻微点头",
+                }
+            ],
+        }
+        profile = prepare_source_blueprint.build_expression_prompt_profile(
+            analysis,
+            source_sha256="a" * 64,
+            policy=policy,
+            detector_binding={"path": "unused.json", "sha256": "b" * 64},
+        )
+
+        self.assertEqual(profile["mode"], "multi_person_semantic")
+        self.assertEqual(profile["blink_policy"], "omit")
+        self.assertNotIn("detector_timeline", profile)
+        self.assertNotIn("natural_blink_fallback", profile)
+        self.assertEqual(
+            profile["semantic_timeline"][0]["expression_and_gaze"],
+            "两人自然对视，来宾轻微点头",
         )
 
     def test_packet_staging_paths_are_rewritten_before_promotion(self):
@@ -381,7 +686,7 @@ class PrepareSourceBlueprintTest(unittest.TestCase):
             )
 
     def test_source_tasks_run_concurrently_through_one_sealed_stage_plan(self):
-        barrier = threading.Barrier(3)
+        barrier = threading.Barrier(4)
 
         def run_at_barrier(command):
             barrier.wait(timeout=1)
@@ -396,6 +701,7 @@ class PrepareSourceBlueprintTest(unittest.TestCase):
                 "prepare_story_analysis": ["story"],
                 "build_part_storyboards": ["storyboard"],
                 "prepare_source_rhythm": ["rhythm"],
+                "prepare_face_expression": ["face-expression"],
             }
             plans = []
             execute_plan = prepare_source_blueprint.stage_execution.execute_plan
@@ -418,7 +724,7 @@ class PrepareSourceBlueprintTest(unittest.TestCase):
                     execution_root=root,
                     job_id=job_id,
                     task_roots=task_roots,
-                    max_workers=3,
+                    max_workers=4,
                 )
 
         self.assertEqual(set(results), set(commands))
@@ -475,7 +781,7 @@ class PrepareSourceBlueprintTest(unittest.TestCase):
                 execution_root=root,
                 job_id=job_id,
                 task_roots=task_roots,
-                max_workers=3,
+                max_workers=4,
             )
 
             self.assertEqual(
@@ -494,6 +800,10 @@ class PrepareSourceBlueprintTest(unittest.TestCase):
                 results["prepare_source_rhythm"]["status"],
                 "PASS",
             )
+            self.assertEqual(
+                results["prepare_face_expression"]["status"],
+                "PASS",
+            )
 
     def test_cache_miss_locks_raw_asr_text_into_source_rhythm(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -507,14 +817,13 @@ class PrepareSourceBlueprintTest(unittest.TestCase):
                 story_command = commands["prepare_story_analysis"]
                 story_dir = Path(story_command[story_command.index("--out-dir") + 1])
                 story_dir.mkdir(parents=True)
-                (story_dir / "asr").mkdir()
                 (story_dir / "video_probe.json").write_text("{}\n", encoding="utf-8")
                 (story_dir / "contact_sheet.jpg").write_bytes(b"contact")
                 (story_dir / "story_analysis_materials.md").write_text("materials\n", encoding="utf-8")
                 write_fake_video_understanding(story_dir)
-                (story_dir / "asr" / "transcript.md").write_text(
-                    "# ASR\n\n## Full Text\n\n黑头闭口涂油皮粉丝涂。\n\n## Chunks\n",
-                    encoding="utf-8",
+                write_fake_asr(
+                    story_dir,
+                    source_sha256=prepare_source_blueprint.sha256_file(video),
                 )
 
                 rhythm_command = commands["prepare_source_rhythm"]
@@ -543,12 +852,20 @@ class PrepareSourceBlueprintTest(unittest.TestCase):
                     json.dumps({"groups": 2, "total_frames": 24, "parts": parts}),
                     encoding="utf-8",
                 )
+
+                face_command = commands["prepare_face_expression"]
+                face_dir = Path(face_command[face_command.index("--out-dir") + 1])
+                write_fake_face_expression(face_dir)
                 return {
                     name: {"status": "PASS", "duration_seconds": 0.01}
                     for name in commands
                 }
 
             with mock.patch.object(
+                prepare_source_blueprint,
+                "prepare_asr_provider",
+                return_value="elevenlabs:scribe_v1",
+            ) as prepare_asr, mock.patch.object(
                 prepare_source_blueprint,
                 "run_parallel_tasks",
                 side_effect=fake_parallel,
@@ -561,6 +878,7 @@ class PrepareSourceBlueprintTest(unittest.TestCase):
                 )
 
             self.assertEqual(report["overall"], "PASS")
+            prepare_asr.assert_called_once()
             self.assertTrue(
                 (
                     output_dir
@@ -574,7 +892,29 @@ class PrepareSourceBlueprintTest(unittest.TestCase):
                 (output_dir / "剧情分析" / "source_rhythm.json").read_text(encoding="utf-8")
             )
             self.assertEqual(rhythm["source_evidence"]["asr_text"], "黑头闭口涂油皮粉丝涂。")
-            self.assertTrue(rhythm["source_evidence"]["asr_source"].endswith("transcript.md"))
+            self.assertTrue(
+                rhythm["source_evidence"]["asr_source"].endswith(
+                    "原口播ASR_elevenlabs.md"
+                )
+            )
+            self.assertEqual(rhythm["source_evidence"]["asr_provider"], "elevenlabs")
+            self.assertEqual(rhythm["source_evidence"]["asr_model"], "scribe_v1")
+            self.assertEqual(
+                rhythm["source_evidence"]["asr_source_video_sha256"],
+                prepare_source_blueprint.sha256_file(video),
+            )
+            self.assertEqual(
+                rhythm["source_evidence"]["speaker_turns"][0]["speaker_id"],
+                "speaker_0",
+            )
+            self.assertEqual(
+                rhythm["source_evidence"]["sentence_segments"][0]["start"],
+                0.1,
+            )
+            self.assertEqual(
+                rhythm["source_evidence"]["face_expression_timeline"]["source_sha256"],
+                prepare_source_blueprint.sha256_file(video),
+            )
 
     def test_cache_hit_restores_facts_without_touching_product_analysis(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -623,7 +963,9 @@ class PrepareSourceBlueprintTest(unittest.TestCase):
                         "source_sha256": source_sha256,
                         "source_evidence": {
                             "asr_text": "source transcript",
-                            "asr_source": str(story_dir / "asr" / "transcript.md"),
+                            "asr_source": str(
+                                story_dir / "asr" / "原口播ASR_elevenlabs.md"
+                            ),
                             "subtitle_observations": [],
                         },
                         "beats": [],
@@ -636,7 +978,14 @@ class PrepareSourceBlueprintTest(unittest.TestCase):
                 encoding="utf-8",
             )
             write_fake_video_understanding(story_dir)
-            (story_dir / "asr" / "transcript.md").write_text("source transcript\n", encoding="utf-8")
+            write_fake_asr(
+                story_dir,
+                text="source transcript",
+                source_sha256=source_sha256,
+                source_path=old_source,
+            )
+            write_fake_face_expression(story_dir / "face_expression")
+            write_fake_expression_profile(story_dir, source_sha256)
 
             parts = []
             for part in [1, 2]:
@@ -699,6 +1048,17 @@ class PrepareSourceBlueprintTest(unittest.TestCase):
             self.assertEqual(
                 restored_rhythm["source_evidence"]["subtitle_observations"],
                 [{"time": 0.5, "text": "人工校准字幕"}],
+            )
+            restored_manifest = (
+                output_dir / "剧情分析" / "asr" / "request_manifest.json"
+            )
+            self.assertEqual(
+                json.loads(restored_manifest.read_text(encoding="utf-8"))["source"],
+                str(video),
+            )
+            self.assertEqual(
+                restored_rhythm["source_evidence"]["asr_request_manifest"]["sha256"],
+                prepare_source_blueprint.sha256_file(restored_manifest),
             )
 
             restored_manifest_path = output_dir / "storyboard_source_refs" / "source_storyboard_manifest.json"

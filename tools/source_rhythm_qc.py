@@ -69,6 +69,238 @@ def asr_full_text(markdown):
     return match.group(1).strip() if match else ""
 
 
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def load_bound_elevenlabs_evidence(source_evidence, source_sha256=None):
+    issues = []
+    asr_source_value = str(source_evidence.get("asr_source") or "")
+    asr_source = Path(asr_source_value).expanduser()
+    expected_dir = asr_source.parent.resolve() if asr_source_value else None
+    bindings = {
+        "timeline": ("asr_timeline", "asr_timeline.json"),
+        "raw": ("asr_raw_response", "elevenlabs_scribe_v1.json"),
+        "manifest": ("asr_request_manifest", "request_manifest.json"),
+    }
+    payloads = {}
+    for label, (field, filename) in bindings.items():
+        binding = source_evidence.get(field)
+        if not isinstance(binding, dict):
+            issues.append({"code": f"missing_asr_{label}_binding"})
+            continue
+        path = Path(str(binding.get("path") or "")).expanduser()
+        if not path.is_file():
+            issues.append({"code": f"missing_asr_{label}", "path": str(path)})
+            continue
+        if expected_dir is not None and path.resolve() != expected_dir / filename:
+            issues.append({"code": f"asr_{label}_path_mismatch", "path": str(path)})
+            continue
+        actual_sha256 = sha256_file(path)
+        if binding.get("sha256") != actual_sha256:
+            issues.append(
+                {
+                    "code": f"asr_{label}_hash_mismatch",
+                    "expected": binding.get("sha256"),
+                    "actual": actual_sha256,
+                }
+            )
+            continue
+        try:
+            payloads[label] = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            issues.append({"code": f"invalid_asr_{label}"})
+
+    timeline = payloads.get("timeline")
+    raw = payloads.get("raw")
+    manifest = payloads.get("manifest")
+    timeline_binding = source_evidence.get("asr_timeline")
+    timeline_binding = timeline_binding if isinstance(timeline_binding, dict) else {}
+    raw_binding = source_evidence.get("asr_raw_response")
+    raw_binding = raw_binding if isinstance(raw_binding, dict) else {}
+    if isinstance(timeline, dict) and isinstance(raw, dict):
+        if raw.get("text") != source_evidence.get("asr_text"):
+            issues.append({"code": "asr_raw_text_mismatch"})
+        if raw.get("transcription_id") != timeline.get("transcription_id"):
+            issues.append({"code": "asr_transcription_id_mismatch"})
+    if isinstance(timeline, dict) and isinstance(manifest, dict):
+        if manifest.get("timeline_sha256") != timeline_binding.get("sha256"):
+            issues.append({"code": "asr_manifest_timeline_hash_mismatch"})
+        if manifest.get("raw_response_sha256") != raw_binding.get("sha256"):
+            issues.append({"code": "asr_manifest_raw_hash_mismatch"})
+        if manifest.get("http_status") != 200:
+            issues.append({"code": "asr_request_status_not_pass"})
+        if manifest.get("provider") != "elevenlabs":
+            issues.append({"code": "asr_request_provider_mismatch"})
+        if manifest.get("model") != timeline.get("model"):
+            issues.append({"code": "asr_request_model_mismatch"})
+        if manifest.get("transcription_id") != timeline.get("transcription_id"):
+            issues.append({"code": "asr_request_transcription_id_mismatch"})
+        if source_sha256 and manifest.get("source_sha256") != source_sha256:
+            issues.append({"code": "asr_source_video_hash_mismatch"})
+        if (
+            source_sha256
+            and source_evidence.get("asr_source_video_sha256") != source_sha256
+        ):
+            issues.append({"code": "asr_embedded_source_video_hash_mismatch"})
+    return timeline, issues
+
+
+def build_asr_timing_summary(source_evidence, beats, source_sha256=None):
+    provider = str(source_evidence.get("asr_provider") or "")
+    timeline = None
+    issues = []
+    if provider == "elevenlabs":
+        timeline, binding_issues = load_bound_elevenlabs_evidence(
+            source_evidence, source_sha256
+        )
+        issues.extend(binding_issues)
+    words = (
+        timeline.get("words")
+        if isinstance(timeline, dict)
+        else source_evidence.get("asr_words")
+    )
+    if not words and provider != "elevenlabs":
+        return {}, []
+    if not isinstance(words, list) or not words:
+        issues.append({"code": "missing_asr_word_timeline"})
+        return {}, issues
+
+    if isinstance(timeline, dict):
+        for field in ("words", "speaker_turns", "sentence_segments", "audio_events"):
+            evidence_field = f"asr_{field}" if field == "words" else field
+            if source_evidence.get(evidence_field) != timeline.get(field):
+                issues.append({"code": f"embedded_asr_{field}_mismatch"})
+    normalized_words = []
+    previous_start = -1.0
+    for index, item in enumerate(words):
+        if not isinstance(item, dict):
+            issues.append({"code": "invalid_asr_word_timeline", "index": index})
+            continue
+        start = item.get("start")
+        end = item.get("end")
+        text = str(item.get("text") or "")
+        if (
+            not text
+            or isinstance(start, bool)
+            or isinstance(end, bool)
+            or not isinstance(start, (int, float))
+            or not isinstance(end, (int, float))
+            or float(start) < previous_start
+            or float(end) < float(start)
+        ):
+            issues.append({"code": "invalid_asr_word_timeline", "index": index})
+            continue
+        previous_start = float(start)
+        normalized_words.append(item)
+
+    spoken_words = [
+        item for item in normalized_words if item.get("type") != "audio_event"
+    ]
+    timeline_text = compact(
+        "".join(str(item.get("text") or "") for item in spoken_words)
+    )
+    evidence_text = compact(source_evidence.get("asr_text"))
+    if timeline_text != evidence_text:
+        issues.append(
+            {
+                "code": "asr_word_timeline_text_mismatch",
+                "expected": evidence_text,
+                "actual": timeline_text,
+            }
+        )
+
+    characters = []
+    for item in spoken_words:
+        for character in compact(item.get("text")):
+            characters.append(
+                {
+                    "start": float(item["start"]),
+                    "end": float(item["end"]),
+                    "speaker_id": item.get("speaker_id"),
+                }
+            )
+    beat_timings = []
+    if source_evidence.get("asr_span_basis", "compact_alnum") == "compact_alnum":
+        for beat in beats:
+            span = beat.get("asr_span")
+            if not isinstance(span, dict):
+                continue
+            start = span.get("start")
+            end = span.get("end")
+            if (
+                isinstance(start, bool)
+                or isinstance(end, bool)
+                or not isinstance(start, int)
+                or not isinstance(end, int)
+                or start < 0
+                or end <= start
+                or end > len(characters)
+            ):
+                continue
+            selected = characters[start:end]
+            speaker_ids = sorted(
+                {
+                    str(item["speaker_id"])
+                    for item in selected
+                    if item.get("speaker_id")
+                }
+            )
+            if not speaker_ids:
+                issues.append(
+                    {
+                        "code": "missing_asr_speaker_binding",
+                        "beat_id": beat.get("id"),
+                    }
+                )
+            beat_timings.append(
+                {
+                    "beat_id": beat.get("id"),
+                    "start": selected[0]["start"],
+                    "end": selected[-1]["end"],
+                    "speaker_ids": speaker_ids,
+                }
+            )
+
+    if provider == "elevenlabs":
+        timed_ids = {item.get("beat_id") for item in beat_timings}
+        for beat in beats:
+            if (
+                compact(beat.get("confirmed_source_line"))
+                and speaker_mode_kind(beat.get("speaker_mode")) != "silent"
+                and beat.get("id") not in timed_ids
+            ):
+                issues.append(
+                    {
+                        "code": "missing_asr_beat_timing",
+                        "beat_id": beat.get("id"),
+                    }
+                )
+
+    speaker_ids = sorted(
+        {
+            str(item["speaker_id"])
+            for item in spoken_words
+            if item.get("speaker_id")
+        }
+    )
+    return {
+        "provider": provider or None,
+        "speaker_ids": speaker_ids,
+        "speaker_count": len(speaker_ids),
+        "word_count": len(spoken_words),
+        "sentence_segment_count": len(
+            source_evidence.get("sentence_segments") or []
+        ),
+        "audio_event_count": len(source_evidence.get("audio_events") or []),
+        "beat_timings": beat_timings,
+    }, issues
+
+
 def expected_line(beat, source_evidence):
     evidence = beat.get("evidence") or {}
     span = beat.get("asr_span") or {}
@@ -114,8 +346,27 @@ def expected_line(beat, source_evidence):
         if not source or source not in line:
             correction_issues.append("correction source is absent from ASR evidence")
             continue
-        if evidence_type != "visible_text" or compact(target) not in visible_text:
-            correction_issues.append("correction target is not backed by visible-text evidence")
+        if evidence_type == "visible_text":
+            if compact(target) not in visible_text:
+                correction_issues.append(
+                    "correction target is not backed by visible-text evidence"
+                )
+                continue
+        elif evidence_type == "semantic_review":
+            confidence = correction.get("confidence")
+            reason = str(correction.get("reason") or "").strip()
+            if (
+                isinstance(confidence, bool)
+                or not isinstance(confidence, (int, float))
+                or float(confidence) < 0.9
+                or not reason
+            ):
+                correction_issues.append(
+                    "semantic correction lacks high-confidence rationale"
+                )
+                continue
+        else:
+            correction_issues.append("unsupported correction evidence type")
             continue
         line = line.replace(source, target, 1)
     return compact(line), correction_issues
@@ -124,6 +375,12 @@ def expected_line(beat, source_evidence):
 def check_source_rhythm(payload):
     issues = []
     source_evidence = payload.get("source_evidence") or {}
+    asr_timing, asr_timing_issues = build_asr_timing_summary(
+        source_evidence,
+        payload.get("beats") or [],
+        payload.get("source_sha256"),
+    )
+    issues.extend(asr_timing_issues)
     asr_source = source_evidence.get("asr_source")
     asr_text_sha256 = source_evidence.get("asr_text_sha256")
     if asr_source and asr_text_sha256:
@@ -160,6 +417,11 @@ def check_source_rhythm(payload):
         for item in payload.get("actual_cut_points") or []
         if isinstance(item, dict) and isinstance(item.get("time"), (int, float))
     ]
+    evidence_frames = {
+        str(item.get("path") or ""): item
+        for item in payload.get("evidence_frames") or []
+        if isinstance(item, dict) and str(item.get("path") or "")
+    }
     for beat in beats:
         expected, correction_issues = expected_line(beat, source_evidence)
         beat_id = beat.get("id") or "unknown"
@@ -229,6 +491,44 @@ def check_source_rhythm(payload):
                             "code": "missing_rhythm_field",
                             "beat_id": beat_id,
                             "field": field,
+                        }
+                    )
+            for frame_ref in beat.get("evidence_frame_refs") or []:
+                frame = evidence_frames.get(str(frame_ref))
+                if not frame:
+                    continue
+                frame_time = frame.get("time")
+                guard_band = frame.get("cut_guard_band_seconds")
+                if not isinstance(guard_band, (int, float)):
+                    evidence_fps = payload.get("evidence_fps")
+                    guard_band = (
+                        1.0 / float(evidence_fps)
+                        if isinstance(evidence_fps, (int, float))
+                        and float(evidence_fps) > 0
+                        else 0.2
+                    )
+                computed_distance = (
+                    min(abs(float(frame_time) - cut) for cut in cut_times)
+                    if isinstance(frame_time, (int, float)) and cut_times
+                    else None
+                )
+                unsafe = frame.get("safe_for_beat_evidence") is False or (
+                    computed_distance is not None
+                    and computed_distance + 1e-9 < float(guard_band)
+                )
+                if unsafe:
+                    issues.append(
+                        {
+                            "code": "unsafe_cut_boundary_evidence",
+                            "beat_id": beat_id,
+                            "frame_ref": str(frame_ref),
+                            "time": frame.get("time"),
+                            "distance_to_nearest_cut": frame.get(
+                                "distance_to_nearest_cut"
+                            )
+                            if frame.get("distance_to_nearest_cut") is not None
+                            else computed_distance,
+                            "required_distance": guard_band,
                         }
                     )
             product_names = beat.get("spoken_product_names")
@@ -383,6 +683,7 @@ def check_source_rhythm(payload):
     return {
         "overall": "FAIL" if issues else "PASS",
         "issues": issues,
+        "asr_timing": asr_timing,
     }
 
 

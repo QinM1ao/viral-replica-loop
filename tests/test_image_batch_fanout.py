@@ -179,6 +179,7 @@ class ImageBatchFanoutTest(unittest.TestCase):
                     "path": str(source.relative_to(self.root)),
                     "size": [856, 1246],
                     "ratio": 0.687,
+                    "frame_count": 12,
                 }
             )
             visual_parts[part] = {
@@ -190,9 +191,34 @@ class ImageBatchFanoutTest(unittest.TestCase):
             self._write_part_contract(part, source, candidate, prompt, invocation)
 
         (self.job_dir / "storyboard_source_refs/source_storyboard_manifest.json").write_text(
-            json.dumps({"parts": manifest_parts}, ensure_ascii=False, indent=2) + "\n",
+            json.dumps(
+                {"selection_mode": "source_rhythm", "parts": manifest_parts},
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
             encoding="utf-8",
         )
+        rhythm = self.job_dir / "剧情分析/source_rhythm.json"
+        rhythm.parent.mkdir(parents=True, exist_ok=True)
+        rhythm.write_text(
+            json.dumps({"schema_version": 3, "beats": [{"id": "sr001"}]}) + "\n",
+            encoding="utf-8",
+        )
+        rhythm_sha256 = image_batch_fanout.stage_execution.sha256_file(rhythm)
+        for name in ("source_rhythm_qc.json", "source_rhythm_visual_review_qc.json"):
+            report = self.job_dir / "checks" / name
+            report.write_text(
+                json.dumps(
+                    {
+                        "overall": "PASS",
+                        "source_rhythm": str(rhythm.relative_to(self.job_dir)),
+                        "source_rhythm_sha256": rhythm_sha256,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
         (self.job_dir / "visual-assets/approved_visual_manifest.json").write_text(
             json.dumps(
                 {
@@ -338,6 +364,61 @@ class ImageBatchFanoutTest(unittest.TestCase):
         self.assertEqual(
             plan["parts"][0]["command"],
             plan["stage_execution"]["packets"][0]["command"],
+        )
+
+    def test_plan_locks_storyboards_even_while_source_details_are_pending(self):
+        rows = image_batch_fanout.read_jobs(self.root)
+        rows[0]["status"] = "pending"
+        with (self.root / "jobs.csv").open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=rows[0].keys())
+            writer.writeheader()
+            writer.writerows(rows)
+
+        plan = image_batch_fanout.build_plan(self.root, self.job_id)
+
+        self.assertEqual(plan["source_storyboard_lock"]["selection_mode"], "source_rhythm")
+        self.assertEqual(len(plan["source_storyboard_lock"]["parts"]), 2)
+        self.assertEqual(
+            plan["source_storyboard_lock"]["source_evidence"]["source_rhythm_sha256"],
+            image_batch_fanout.stage_execution.sha256_file(
+                self.job_dir / "剧情分析/source_rhythm.json"
+            ),
+        )
+        source = self.job_dir / "storyboard_source_refs/source_storyboard_part1.jpg"
+        source.write_bytes(b"late-background-mutation")
+        with self.assertRaisesRegex(ValueError, "source storyboard lock"):
+            image_batch_fanout.validate_fanout_plan(self.root, plan)
+
+    def test_plan_seals_canonical_job_output_root(self):
+        canonical = self.root / "jobs" / self.job_id / "work"
+        canonical.parent.mkdir(parents=True)
+        self.job_dir.rename(canonical)
+        self.job_dir = canonical
+        for path in canonical.rglob("*.json"):
+            path.write_text(
+                path.read_text(encoding="utf-8").replace(
+                    "output/job-001", "jobs/job-001/work"
+                ),
+                encoding="utf-8",
+            )
+        rows = image_batch_fanout.read_jobs(self.root)
+        rows[0]["output_dir"] = f"jobs/{self.job_id}/work"
+        with (self.root / "jobs.csv").open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=rows[0].keys())
+            writer.writeheader()
+            writer.writerows(rows)
+
+        plan = image_batch_fanout.build_plan(self.root, self.job_id)
+
+        self.assertEqual(
+            plan["stage_execution"]["job_output_root"],
+            f"jobs/{self.job_id}/work",
+        )
+        self.assertEqual(
+            image_batch_fanout.stage_execution.bound_job_root(
+                self.root, plan["stage_execution"]
+            ),
+            canonical.resolve(),
         )
 
     def test_plan_stops_when_complete_execution_specs_are_missing(self):
@@ -516,6 +597,118 @@ class ImageBatchFanoutTest(unittest.TestCase):
                     / f"image-batch/fanout/logs/{part}.stderr.txt"
                 ).is_file()
             )
+
+    def test_run_preserves_unknown_provider_outcome_and_stops(self):
+        plan = image_batch_fanout.write_plan(
+            self.root,
+            image_batch_fanout.build_plan(self.root, self.job_id),
+        )
+
+        def timed_out_runner(command, **_kwargs):
+            invocation = Path(command[command.index("--invocation-manifest") + 1])
+            invocation.parent.mkdir(parents=True, exist_ok=True)
+            invocation.write_text(
+                json.dumps(
+                    {
+                        "status": "STOP",
+                        "failure_kind": "provider_result_unknown",
+                        "provider_outcome": "unknown",
+                        "automatic_retry_allowed": False,
+                        "read_timeout_seconds": 900,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            return mock.Mock(
+                returncode=3,
+                stdout="",
+                stderr="Matpool response timed out after request submission",
+            )
+
+        report = image_batch_fanout.run_fanout(
+            self.root,
+            self.job_id,
+            plan["plan_path"],
+            max_workers=2,
+            runner=timed_out_runner,
+        )
+
+        self.assertEqual(report["overall"], "STOP")
+        for result in report["results"]:
+            self.assertEqual(result["status"], "STOP")
+            self.assertEqual(result["failure_kind"], "provider_result_unknown")
+            self.assertEqual(result["provider_outcome"], "unknown")
+            self.assertFalse(result["automatic_retry_allowed"])
+            self.assertEqual(result["read_timeout_seconds"], 900)
+
+    def test_unknown_provider_outcome_keeps_mixed_batch_stopped(self):
+        plan = image_batch_fanout.write_plan(
+            self.root,
+            image_batch_fanout.build_plan(self.root, self.job_id),
+        )
+
+        def mixed_runner(command, **_kwargs):
+            part = command[command.index("--part") + 1]
+            invocation = Path(command[command.index("--invocation-manifest") + 1])
+            invocation.parent.mkdir(parents=True, exist_ok=True)
+            if part == "part1":
+                invocation.write_text(
+                    json.dumps(
+                        {
+                            "status": "STOP",
+                            "failure_kind": "provider_result_unknown",
+                            "provider_outcome": "unknown",
+                            "automatic_retry_allowed": False,
+                            "read_timeout_seconds": 900,
+                        }
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                return mock.Mock(returncode=3, stdout="", stderr="read timeout")
+            invocation.write_text(
+                json.dumps({"status": "FAIL", "provider_outcome": "failed"}) + "\n",
+                encoding="utf-8",
+            )
+            return mock.Mock(returncode=1, stdout="", stderr="provider rejected request")
+
+        report = image_batch_fanout.run_fanout(
+            self.root,
+            self.job_id,
+            plan["plan_path"],
+            max_workers=2,
+            runner=mixed_runner,
+        )
+
+        self.assertEqual(
+            [result["status"] for result in report["results"]],
+            ["STOP", "FAIL"],
+        )
+        self.assertEqual(report["overall"], "STOP")
+        self.assertEqual(report["stop_reason"], "provider_result_unknown")
+
+    def test_run_cli_preserves_stop_exit_code(self):
+        argv = [
+            str(FANOUT),
+            "--root",
+            str(self.root),
+            "--job-id",
+            self.job_id,
+            "run",
+        ]
+        with (
+            mock.patch.object(image_batch_fanout.sys, "argv", argv),
+            mock.patch.object(
+                image_batch_fanout,
+                "run_fanout",
+                return_value={"overall": "STOP", "stage": "image_batch_qc"},
+            ),
+        ):
+            with self.assertRaises(SystemExit) as stopped:
+                image_batch_fanout.main()
+
+        self.assertEqual(stopped.exception.code, 3)
 
     def test_run_rewrites_packet_staging_paths_in_promoted_evidence(self):
         plan = image_batch_fanout.write_plan(

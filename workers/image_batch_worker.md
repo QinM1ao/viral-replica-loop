@@ -6,14 +6,16 @@
 
 ## Purpose
 
-Generate or repair all required storyboard images immediately after storyboard PASS.
+Generate or repair all required storyboard images immediately after the final 12-panel storyboards are hash-locked. Image Part generation may run in the same sealed overlap plan as non-image-critical source details; it does not need to wait for the `source_blueprint` status transition.
+
+The early-start boundary is strict: source rhythm QC, per-beat visual review, final rhythm-aware storyboard rebuild, role/product replacement facts, and the image prompt/reference specs must already be complete. Narrative prose, face/expression refinement, timeline/subtitle/shot views, seam notes, contamination prose, and their remaining consistency checks may finish in the background because they cannot alter the locked boards. When early image packets finish, preserve and reuse them; wait for the source gate before serialized image merge/QC/state writeback.
 
 The default batch image task is a simple source-storyboard replacement edit, not a creative regeneration task. For each Part, preserve the original source scene, camera crops, panel grid, hand/action placement, shot order, and existing `Shot 01-12` labels; replace only old person, old product/tool/mud, and old subtitles/overlays inside panels. Shot labels are storyboard navigation metadata, not subtitle contamination. Do not run a separate image sample first unless the job explicitly asks for a sample stop; a 45s job should edit Part1, Part2, and Part3 together in this stage through Part-level fanout when possible.
 
 For multi-Part jobs, the default execution shape is:
 
-1. Write `output/<job-id>/image-batch/part_execution_specs.json` with every required Part exactly once. Each entry must name its approved `prompt_path`, ordered existing local `references` (`role` plus `path`), and explicit `depends_on`; do not guess missing references.
-2. Run `tools/image_batch_fanout.py plan`. Missing, incomplete, or unreadable execution specs are `STOP`, so the default worker cannot emit a non-executable plan.
+1. Write `output/<job-id>/image-batch/part_execution_specs.json` with every required Part exactly once. Each entry must name its approved `prompt_path`, ordered existing local `references` (`role` plus `path`), and explicit `depends_on`; do not guess missing references. The source storyboard manifest must be `selection_mode=source_rhythm` with exactly 12 frames per Part.
+2. Run `tools/image_batch_fanout.py plan`. It seals `source_storyboard_lock` from the manifest and every Part hash. Missing, incomplete, unreadable, uniform, non-12-frame, or later-mutated storyboard inputs cannot execute under a stale plan: repair or rebuild the final storyboard inputs, reseal the plan, and continue the task. This validation is a retry boundary, not a terminal job failure.
 3. Generate each Part with an isolated `--contract output/<job-id>/image-batch/contracts/partX_contract.json` and an isolated invocation manifest.
 4. Dispatch only the plan's sealed `stage_execution` packets to bounded sub-agents (or the local command dispatcher); each packet may execute only its declared Matpool command and write only its candidate, contract, invocation, log, and completion paths. For `storyboard_derived`, dispatch only the dependency-ready wave.
 5. Run `tools/image_batch_fanout.py merge` once all required Part contracts exist.
@@ -31,7 +33,8 @@ When intake uses `person_assets=storyboard_derived`, read `.agents/skills/video-
 
 ## Inputs
 
-- Passed storyboard and contamination audit.
+- Hash-locked final source storyboard manifest and every 12-panel Part image.
+- Minimal role/product replacement facts needed by the edit prompt. Full narrative, seam, subtitle, and contamination prose are not prerequisites when those facts are already explicit in the prompt specs.
 - Source Part storyboard images for every target Part.
 - Product assets.
 - `output/<job-id>/product_profile.json`.
@@ -209,6 +212,7 @@ Choose exactly one:
 
 ## Stop Conditions
 
+- A Matpool read timeout reports `provider_result_unknown`: the remote request may still have completed or consumed quota. Preserve the fanout report and invocation evidence, do not submit an automatic retry, and stop for provider/account verification plus an explicit user decision.
 - Same failure repeats twice.
 - A candidate has been recomposed, scene-changed, or visually squeezed and a fresh source-storyboard edit route is not available.
 - Client review is required.

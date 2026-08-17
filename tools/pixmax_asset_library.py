@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-"""Create Active Pixmax material-library image assets from public image URLs."""
+"""Create Active Pixmax image/video assets from public staging URLs."""
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
 import subprocess
 import sys
 import time
+from fractions import Fraction
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -36,6 +38,14 @@ COMMON_IMAGE_ASPECTS = {
     "16:9": 16 / 9,
 }
 ASPECT_RELATIVE_TOLERANCE = 0.03
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def gateway_key() -> str:
@@ -110,6 +120,87 @@ def inspect_source_geometry(paths: list[Path]) -> list[dict]:
     return results
 
 
+def probe_source_video(path: Path, require_no_audio: bool = False) -> dict:
+    if not path.is_file():
+        raise SystemExit(f"source video missing: {path}")
+    proc = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "stream=codec_type,width,height,avg_frame_rate",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "json",
+            str(path),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        raise SystemExit(f"source video is not readable: {path}: {proc.stderr.strip()}")
+    data = json.loads(proc.stdout)
+    streams = data.get("streams") or []
+    video_streams = [item for item in streams if item.get("codec_type") == "video"]
+    audio_streams = [item for item in streams if item.get("codec_type") == "audio"]
+    if not video_streams:
+        raise SystemExit(f"source video has no video stream: {path}")
+    stream = video_streams[0]
+    try:
+        fps = float(Fraction(stream.get("avg_frame_rate") or "0/1"))
+        duration = float((data.get("format") or {}).get("duration") or 0)
+        width = int(stream.get("width") or 0)
+        height = int(stream.get("height") or 0)
+    except (TypeError, ValueError, ZeroDivisionError) as exc:
+        raise SystemExit(f"source video metadata is invalid: {path}: {exc}") from exc
+    status = "PASS"
+    reasons = []
+    if not 23.8 <= fps <= 60:
+        status = "FAIL"
+        reasons.append(f"fps must be 23.8–60, found {fps:.3f}")
+    if duration <= 0 or duration > 30.3:
+        status = "FAIL"
+        reasons.append(f"duration must be 0–30.3 seconds, found {duration:.3f}")
+    if width <= 0 or height <= 0:
+        status = "FAIL"
+        reasons.append(f"invalid dimensions {width}x{height}")
+    if require_no_audio and audio_streams:
+        status = "FAIL"
+        reasons.append("reference video must have no audio stream")
+    return {
+        "path": str(path),
+        "width": width,
+        "height": height,
+        "fps": round(fps, 6),
+        "duration": round(duration, 6),
+        "audio_stream_count": len(audio_streams),
+        "status": status,
+        "reason": "; ".join(reasons),
+    }
+
+
+def inspect_source_media(
+    paths: list[Path],
+    asset_types: list[str],
+    *,
+    require_video_no_audio: bool = False,
+) -> list[dict]:
+    reports = []
+    for path, asset_type in zip(paths, asset_types):
+        if asset_type == "Image":
+            report = inspect_source_geometry([path])[0]
+        elif asset_type == "Video":
+            report = probe_source_video(path, require_no_audio=require_video_no_audio)
+        else:
+            raise SystemExit(f"unsupported Pixmax asset type: {asset_type!r}")
+        reports.append({"asset_type": asset_type, **report})
+        reports[-1]["source_sha256"] = file_sha256(path)
+    return reports
+
+
 def create_group(client: httpx.Client, args: argparse.Namespace, api_key: str) -> tuple[str, dict]:
     response = client.post(
         openapi_url(args.base_url, "CreateAssetGroup"),
@@ -136,6 +227,7 @@ def create_asset(
     group_id: str,
     url: str,
     role: str,
+    asset_type: str,
     index: int,
 ) -> tuple[str, dict]:
     last_data: dict = {}
@@ -147,7 +239,7 @@ def create_asset(
             json={
                 "GroupId": group_id,
                 "URL": url,
-                "AssetType": "Image",
+                "AssetType": asset_type,
                 "Name": name,
                 "ProjectName": args.project_name,
             },
@@ -194,12 +286,12 @@ def wait_active(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--urls", nargs="+", required=True, help="Public http(s) image URLs to create as Pixmax assets.")
+    parser.add_argument("--urls", nargs="+", required=True, help="Public http(s) image/video URLs to create as Pixmax assets.")
     parser.add_argument(
         "--source-files",
         nargs="+",
         type=Path,
-        help="Local image files aligned with --urls; checked before any network asset creation.",
+        help="Local image/video files aligned with --urls; checked before any network asset creation.",
     )
     parser.add_argument(
         "--allow-unverified-remote-geometry",
@@ -207,6 +299,18 @@ def parse_args() -> argparse.Namespace:
         help="Allow URL-only creation when the original local files are genuinely unavailable.",
     )
     parser.add_argument("--roles", nargs="*", default=[], help="Optional role names aligned with --urls.")
+    parser.add_argument(
+        "--asset-types",
+        nargs="*",
+        default=[],
+        choices=("Image", "Video"),
+        help="Pixmax asset types aligned with --urls; defaults to Image for compatibility.",
+    )
+    parser.add_argument(
+        "--require-video-no-audio",
+        action="store_true",
+        help="Reject source videos that contain an audio stream.",
+    )
     parser.add_argument("--out-json", type=Path, required=True)
     parser.add_argument("--base-url", default=os.environ.get("SEEDANCE_GATEWAY_BASE_URL", DEFAULT_BASE_URL))
     parser.add_argument("--project-name", default=os.environ.get("SEEDANCE_PIXMAX_PROJECT_NAME", DEFAULT_PROJECT_NAME))
@@ -224,6 +328,8 @@ def main() -> int:
         raise SystemExit("--roles must have the same length as --urls")
     if args.source_files and len(args.source_files) != len(args.urls):
         raise SystemExit("--source-files must have the same length as --urls")
+    if args.asset_types and len(args.asset_types) != len(args.urls):
+        raise SystemExit("--asset-types must have the same length as --urls")
     if not args.source_files and not args.allow_unverified_remote_geometry:
         raise SystemExit(
             "--source-files is required so image geometry is checked before Pixmax; "
@@ -235,6 +341,7 @@ def main() -> int:
 
     args.out_json.parent.mkdir(parents=True, exist_ok=True)
     roles = args.roles or [f"image_{index}" for index in range(1, len(args.urls) + 1)]
+    asset_types = args.asset_types or ["Image"] * len(args.urls)
     report = {
         "base_url": args.base_url,
         "project_name": args.project_name,
@@ -243,16 +350,23 @@ def main() -> int:
         "items": [],
     }
     if args.source_files:
-        report["geometry_preflight"] = inspect_source_geometry(args.source_files)
-        failures = [item for item in report["geometry_preflight"] if item["status"] != "PASS"]
+        report["media_preflight"] = inspect_source_media(
+            args.source_files,
+            asset_types,
+            require_video_no_audio=args.require_video_no_audio,
+        )
+        report["geometry_preflight"] = [
+            item for item in report["media_preflight"] if item["asset_type"] == "Image"
+        ]
+        failures = [item for item in report["media_preflight"] if item["status"] != "PASS"]
         if failures:
             report["overall"] = "FAIL"
             args.out_json.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             failed = failures[0]
             raise SystemExit(
-                "non-standard aspect ratio before Pixmax asset creation: "
-                f"{failed['path']} is {failed['width']}x{failed['height']}; "
-                "create a non-distorted transport copy on a common canvas first"
+                "source media failed before Pixmax asset creation: "
+                f"{failed['path']}: "
+                f"{failed.get('reason') or 'non-standard aspect ratio'}"
             )
     else:
         report["geometry_preflight"] = [
@@ -268,15 +382,28 @@ def main() -> int:
         report["group_id"] = group_id
         report["group_raw"] = group_raw
 
-        for index, (role, url) in enumerate(zip(roles, args.urls), start=1):
-            asset_id, create_raw = create_asset(client, args, api_key, group_id, url, role, index)
+        for index, (role, asset_type, url) in enumerate(
+            zip(roles, asset_types, args.urls), start=1
+        ):
+            asset_id, create_raw = create_asset(
+                client, args, api_key, group_id, url, role, asset_type, index
+            )
             status, latest = wait_active(client, args, api_key, asset_id)
             item = {
                 "role": role,
+                "asset_type": asset_type,
                 "source_url": url,
                 "asset_id": asset_id,
                 "asset_ref": f"asset://{asset_id}",
                 "status": status,
+                "source_path": (
+                    report["media_preflight"][index - 1]["path"]
+                    if args.source_files else ""
+                ),
+                "source_sha256": (
+                    report["media_preflight"][index - 1]["source_sha256"]
+                    if args.source_files else ""
+                ),
                 "create_raw": create_raw,
                 "latest_raw": latest,
             }

@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "table_id": "pf-02-supported-branches-v1",
+  "cases": [
+    {
+      "case_id": "missing-required-input",
+      "input": {
+        "source_video": "missing"
+      },
+      "expected": {
+        "conclusion": "STOP",
+        "machine_code": "missing_input",
+        "paid_task_count": 0
+      }
+    },
+    {
+      "case_id": "generic-profile-routing",
+      "input": {
+        "profile_route": "generic"
+      },
+      "expected": {
+        "loaded_rules": [
+          "generic"
+        ]
+      }
+    },
+    {
+      "case_id": "clay-mask-profile-routing",
+      "input": {
+        "profile_route": "category:clay_mask"
+      },
+      "expected": {
+        "loaded_rules": [
+          "generic",
+          "category:clay_mask"
+        ]
+      }
+    },
+    {
+      "case_id": "toner-profile-routing",
+      "input": {
+        "profile_route": "category:toner"
+      },
+      "expected": {
+        "loaded_rules": [
+          "generic",
+          "category:toner"
+        ]
+      }
+    },
+    {
+      "case_id": "storyboard-derived-identity",
+      "input": {
+        "person_assets": "omitted",
+        "people_mode": "multi-person"
+      },
+      "expected": {
+        "person_assets": "storyboard_derived",
+        "protagonist_identity_source": "passed_current_job_storyboard"
+      }
+    },
+    {
+      "case_id": "generation-approval-boundary",
+      "input": {
+        "status": "seedance_inputs_prepared",
+        "generation_approval": false
+      },
+      "expected": {
+        "conclusion": "STOP",
+        "next_stage": "generation_approval",
+        "provider_submission_allowed": false,
+        "paid_task_count": 0
+      }
+    },
+    {
+      "case_id": "failed-part-retry-boundary",
+      "input": {
+        "generation_intent": "failed_part_retry",
+        "new_targeted_approval": false
+      },
+      "expected": {
+        "conclusion": "STOP",
+        "retry_authority": 0,
+        "paid_task_count": 0
+      }
+    },
+    {
+      "case_id": "request-rejection",
+      "input": {
+        "mutation_id": "model-mismatch"
+      },
+      "expected": {
+        "conclusion": "STOP",
+        "machine_code": "unmatched_request",
+        "real_task_count": 0
+      }
+    },
+    {
+      "case_id": "local-finishing",
+      "input": {
+        "ordered_inputs": [
+        "finalization/part-01.mp4",
+        "finalization/part-02.mp4"
+        ]
+      },
+      "expected": {
+        "conclusion": "PASS",
+      "output": "output/job-001/final/final_video.mp4",
+        "caption_policy": "caption-free",
+      "expected_frames": 23
+      }
+    },
+    {
+      "case_id": "subtitle-clean-classification",
+      "input": {
+      "input": "finalization/subtitle-clean.mp4"
+      },
+      "expected": {
+        "conclusion": "PASS",
+        "mediakit_task_count": 0
+      }
+    },
+    {
+      "case_id": "subtitle-burned-in-classification",
+      "input": {
+      "input": "finalization/subtitle-burned-in.mp4",
+        "automatic_attempts_spent": 0
+      },
+      "expected": {
+        "conclusion": "STOP",
+        "next_stage": "subtitle_removal_dispatch_barrier",
+        "automatic_attempt_authority": 1,
+        "automatic_retry_authority": 0
+      }
+    },
+    {
+      "case_id": "final-technical-qc",
+      "input": {
+        "media_expectations": "finalization/media_expectations.json"
+      },
+      "expected": {
+        "conclusion": "PASS",
+      "required_streams": [
+        "video",
+        "audio"
+      ],
+        "duration_seconds": 2.0
+      }
+    }
+  ]
+}

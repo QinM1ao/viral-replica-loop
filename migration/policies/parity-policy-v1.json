@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "policy_id": "parity-policy-v1",
+  "description": "Comparison levels and self-reproducibility boundary consumed by the later Release Acceptance Harness.",
+  "levels": {
+    "I": "Immutable bytes for accepted historical artifacts and evidence.",
+    "B": "Byte-exact deterministic behavior.",
+    "C": "Canonical-exact structured behavior with only declared logical root mapping.",
+    "M": "Measured decoded-media equivalence.",
+    "S": "Exact stochastic request contract plus normalized QC conclusion class."
+  },
+  "legacy_self_reproducibility": {
+    "required_consecutive_runs": 2,
+    "same_source_closure_required": true,
+    "same_runtime_contract_required": true,
+    "same_test_manifest_required": true,
+    "same_test_result_projection_required": true,
+    "network_access": "macOS denies external outbound access for the main partition and Python socket/DNS guards cover every Python process; only the eight source-bound nested-sandbox contract tests omit the outer OS sandbox",
+    "nested_sandbox_exception": "exact test IDs are declared in legacy-source-closure-v1 and run only with the inherited Python socket/DNS guard because macOS refuses sandbox nesting",
+    "provider_credentials": "removed",
+    "provider_submissions_allowed": false,
+    "unstable_result": "STOP baseline_unstable"
+  },
+  "normalization_allowlist": [
+    "plugin_root",
+    "workspace_root",
+    "job_root",
+    "declared_temporary_root",
+    "created_at",
+    "updated_at",
+    "generated_at"
+  ],
+  "normalization_forbidden": [
+    "stage or rule identity",
+    "status or ordering",
+    "source or artifact hash",
+    "model endpoint or taskCode",
+    "prompt or source wording",
+    "reference role or order",
+    "approval spend retry or idempotency",
+    "QC family threshold or conclusion"
+  ],
+  "golden_update": {
+    "automatic_accept_on_failure": false,
+    "same_change_as_migration_candidate": false,
+    "explicit_reason_required": true,
+    "new_baseline_identity_required": true
+  }
+}

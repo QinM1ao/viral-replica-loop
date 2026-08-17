@@ -1,0 +1,3 @@
+# Targeted Stage Execution Audit
+
+Normal Stage Execution uses preventive write isolation plus targeted checks of the active job's control files and coordinator-owned state; it does not scan or back up the whole repository. When the command sandbox is unavailable, execution automatically becomes serial, temporarily moves other jobs and Git metadata out of reach, and protects the current job plus pre-existing dirty files with macOS or Linux copy-on-write recovery. It never falls back to reading every tracked file or walking the full output tree. The full-repository content audit remains an explicit diagnostic mode. This keeps normal work fast without removing sealed staging, PASS-only promotion, or recovery of user files.

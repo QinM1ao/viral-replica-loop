@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "result": {
+    "asset_type": "AI改好分镜图",
+    "image_route": "matpool_gpt_image_2_edit",
+    "path": "image/current_job_storyboard.png",
+    "sha256": "0c01a510bae03c8c34657ecf633829729aeb4891d70c5bfee7547f40d6b3d3a6",
+    "contains_source_video_pixels": false
+  },
+  "receipt": {
+    "mode": "sealed_offline_replay",
+    "real_submit": false,
+    "task_created": false,
+    "paid_task_count": 0,
+    "media_generation_task_count": 0,
+    "external_effects": []
+  }
+}

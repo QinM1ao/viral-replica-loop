@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "recording_id": "pf-01-source-understanding-response-v1",
+  "status": "completed",
+  "result": {
+    "replication_mode": "source_locked",
+    "speaker_mode": "narration",
+    "audible": true,
+    "ordered_beats": [
+      "open",
+      "texture-proof",
+      "single-wipe"
+    ],
+    "qc_class": "PASS"
+  },
+  "receipt": {
+    "mode": "sealed_offline_replay",
+    "real_submit": false,
+    "task_created": false,
+    "paid_task_count": 0,
+    "media_generation_task_count": 0,
+    "external_effects": []
+  }
+}

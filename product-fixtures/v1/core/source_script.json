@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "mode": "source_locked",
+  "speaker_mode": "narration",
+  "lines": [
+    {
+      "line_id": "L01",
+      "text": "Open it, show the texture, and wipe once.",
+      "emphasis": [
+        "texture",
+        "once"
+      ]
+    }
+  ],
+  "line_edits": []
+}

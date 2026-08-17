@@ -1,0 +1,5 @@
+# Runtime Is Locked, Downloaded, and Rebuildable
+
+The Plugin Package ships Bootstrap logic, exact version locks, approved artifact locations, integrity hashes, license metadata, and diagnostics rather than embedding every multi-gigabyte runtime and model. Workspace Bootstrap transactionally prepares the base engine and mandatory MediaPipe family inside `.viral-replica/runtime/`; large or conditional families such as Qwen ASR, depth estimation, and Node/HyperFrames are prepared before their first required stage. Downloads are checkpointed and resumable, build in an isolated staging directory, validate before atomic activation, and cannot damage a previously ready runtime. Normal Job execution never performs dynamic package installation. Homebrew, sudo, global Python or Node packages, user site-packages, global Skills, sibling checkouts, and undeclared user caches are prohibited dependencies. Deleting the Managed Runtime is safe because the plugin can rebuild the same locked contract from declared sources.
+
+The Qwen ASR portion of this decision is superseded by ADR 0051; the remaining managed-runtime rules still apply to local detector and depth families.

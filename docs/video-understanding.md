@@ -62,7 +62,7 @@ On a cache miss, `prepare_story_analysis.py` runs four source-reading operations
 local source video
   ├─ Seed 2.0 Mini full-video understanding at 2fps
   ├─ Seed 2.0 Mini opening rapid-hook review at 5fps
-  ├─ Qwen ASR for exact source words
+  ├─ ElevenLabs Scribe v1 for raw words, speakers, word timestamps, sentence segments, and audio events
   └─ contact sheet for broad visual inspection
 
 measured source-rhythm lane
@@ -74,7 +74,7 @@ rapid-hook semantics + measured cuts -> hook_review/aligned_timeline.json
 all evidence -> checked source_rhythm.json -> current-job story analysis
 ```
 
-Seed 2.0 Mini is the primary semantic reading: story structure, visual actions, visible text, character roles, product use, speaker mode, and uncertainties. The 5fps rapid-hook result supplies the order and type of sub-second actions, but its model timestamps are not treated as exact. `aligned_timeline.json` snaps those semantic blocks to measured scene cuts and attaches candidate before/contact/after frames. Raw Qwen ASR controls exact spoken words; measured cuts and cited pixels control timing, hard cuts, action peaks, and physical state changes. When the model conflicts with direct evidence, the direct evidence wins and the checker records the conflict.
+Seed 2.0 Mini is the primary semantic reading: story structure, visual actions, visible text, character roles, product use, speaker mode, and uncertainties. The 5fps rapid-hook result supplies the order and type of sub-second actions, but its model timestamps are not treated as exact. `aligned_timeline.json` snaps those semantic blocks to measured scene cuts and attaches candidate before/contact/after frames. Raw ElevenLabs text remains the auditable speech evidence; its word timestamps and speaker IDs control audio segmentation, while measured cuts and cited pixels control visual timing, hard cuts, action peaks, and physical state changes. Visible text corrects named words. Obvious lexical/context errors may be corrected only in the review layer with a recorded high-confidence rationale; the raw evidence is never overwritten.
 
 The model response is cached only with source facts. The cache key includes the source-video SHA-256, the exact video-understanding config, and the hashes of the relevant tools. A model/config/tool change invalidates the cache.
 

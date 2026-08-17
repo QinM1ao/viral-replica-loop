@@ -78,21 +78,66 @@ def video_metrics(path):
     }
 
 
-def freeze_detect(path):
+def technical_detect(path, contact_sheet=None):
     if not shutil.which("ffmpeg"):
-        return {"available": False, "events": [], "error": "ffmpeg not found"}
-    result = run([
+        unavailable = {
+            "available": False,
+            "events": [],
+            "error": "ffmpeg not found",
+        }
+        return unavailable, dict(unavailable), 0
+    filter_complex = (
+        "[0:v]split=3[freeze_in][black_in][sheet_in];"
+        "[freeze_in]freezedetect=n=-60dB:d=0.5[freeze_out];"
+        "[black_in]blackdetect=d=0.5:pix_th=0.10[black_out];"
+        "[sheet_in]fps=1/3,scale=180:-1,tile=5x4[sheet_out]"
+        if contact_sheet is not None
+        else (
+            "[0:v]split=2[freeze_in][black_in];"
+            "[freeze_in]freezedetect=n=-60dB:d=0.5[freeze_out];"
+            "[black_in]blackdetect=d=0.5:pix_th=0.10[black_out]"
+        )
+    )
+    cmd = [
         "ffmpeg",
+        "-y",
         "-hide_banner",
         "-nostats",
         "-i", str(path),
-        "-vf", "freezedetect=n=-60dB:d=0.5",
+        "-filter_complex",
+        filter_complex,
+        "-map", "[freeze_out]",
+        "-map", "[black_out]",
         "-f", "null",
         "-",
-    ])
+    ]
+    if contact_sheet is not None:
+        contact_sheet.parent.mkdir(parents=True, exist_ok=True)
+        cmd.extend([
+            "-map", "[sheet_out]",
+            "-frames:v", "1",
+            "-q:v", "3",
+            str(contact_sheet),
+        ])
+    result = run(cmd)
     text = result.stderr + "\n" + result.stdout
-    events = [line.strip() for line in text.splitlines() if "freezedetect" in line and "freeze_" in line]
-    return {"available": True, "events": events, "error": "" if result.returncode == 0 else result.stderr[-1000:]}
+    available = result.returncode == 0
+    error = "" if available else result.stderr[-1000:]
+    freeze_events = [
+        line.strip()
+        for line in text.splitlines()
+        if "freezedetect" in line and "freeze_" in line
+    ]
+    black_events = [
+        line.strip()
+        for line in text.splitlines()
+        if "blackdetect" in line and "black_" in line
+    ]
+    return (
+        {"available": available, "events": freeze_events, "error": error},
+        {"available": available, "events": black_events, "error": error},
+        1,
+    )
 
 
 def low_motion_detect(path):
@@ -112,42 +157,8 @@ def low_motion_detect(path):
     return {"available": True, "events": events, "error": "" if result.returncode == 0 else result.stderr[-1000:]}
 
 
-def black_detect(path):
-    if not shutil.which("ffmpeg"):
-        return {"available": False, "events": [], "error": "ffmpeg not found"}
-    result = run([
-        "ffmpeg",
-        "-hide_banner",
-        "-nostats",
-        "-i", str(path),
-        "-vf", "blackdetect=d=0.5:pix_th=0.10",
-        "-f", "null",
-        "-",
-    ])
-    text = result.stderr + "\n" + result.stdout
-    events = [line.strip() for line in text.splitlines() if "blackdetect" in line and "black_" in line]
-    return {"available": True, "events": events, "error": "" if result.returncode == 0 else result.stderr[-1000:]}
-
-
 def skipped_detector(reason, available=False):
     return {"available": available, "events": [], "error": reason}
-
-
-def make_contact_sheet(video, out_path):
-    if not shutil.which("ffmpeg"):
-        return False, "ffmpeg not found"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    result = run([
-        "ffmpeg",
-        "-y",
-        "-hide_banner",
-        "-nostats",
-        "-i", str(video),
-        "-vf", "fps=1/3,scale=180:-1,tile=5x4",
-        "-frames:v", "1",
-        str(out_path),
-    ])
-    return result.returncode == 0 and out_path.exists(), result.stderr[-1000:]
 
 
 def load_text(path):
@@ -192,6 +203,11 @@ def main():
     parser.add_argument("--max-extra-low-motion-holds", type=int, default=0)
     parser.add_argument("--brand-term", action="append", default=[])
     parser.add_argument("--asr-md", type=Path)
+    parser.add_argument(
+        "--contact-sheet",
+        action="store_true",
+        help="Deprecated compatibility flag; the technical scan always emits the required sheet.",
+    )
     parser.add_argument("--out-dir", type=Path, required=True)
     args = parser.parse_args()
 
@@ -204,20 +220,35 @@ def main():
     else:
         checks.append({"name": "ffprobe_available", "status": "PASS", "detail": "ffprobe found"})
 
+    contact_sheet = args.out_dir / "contact_sheet.jpg"
+    contact_sheet.unlink(missing_ok=True)
+    contact_sheet_requested = True
     total_duration = 0.0
     for video in args.videos:
         metrics = video_metrics(video)
         if metrics.get("readable") and metrics.get("video_streams", 0) > 0:
-            freeze = freeze_detect(video)
-            black = black_detect(video)
+            sheet_path = (
+                contact_sheet
+                if contact_sheet_requested and not contact_sheet.exists()
+                else None
+            )
+            freeze, black, scan_passes = technical_detect(video, sheet_path)
+            if sheet_path is not None:
+                contact_sheet_requested = False
         elif metrics.get("readable"):
             freeze = skipped_detector("skipped: video has no video stream", available=True)
             black = skipped_detector("skipped: video has no video stream", available=True)
+            scan_passes = 0
         else:
             freeze = skipped_detector("skipped: video is missing, unreadable, or has no video stream")
             black = skipped_detector("skipped: video is missing, unreadable, or has no video stream")
+            scan_passes = 0
         metrics["freeze"] = freeze
         metrics["black"] = black
+        metrics["technical_scan"] = {
+            "passes": scan_passes,
+            "detectors": ["freeze", "black"],
+        }
         video_reports.append(metrics)
         total_duration += float(metrics.get("duration", 0) or 0)
 
@@ -302,13 +333,12 @@ def main():
             "detail": "term found in ASR text" if term in asr_text else "term missing from ASR text",
         })
 
-    contact_sheet = args.out_dir / "contact_sheet.jpg"
-    first_readable = next((Path(v["path"]) for v in video_reports if v.get("readable") and v.get("video_streams", 0) > 0), None)
-    ok, detail = make_contact_sheet(first_readable, contact_sheet) if first_readable else (False, "no readable video")
+    ok = contact_sheet.is_file()
+    detail = str(contact_sheet) if ok else "contact sheet was not produced by the technical scan"
     checks.append({
         "name": "contact_sheet",
         "status": "PASS" if ok else "FAIL",
-        "detail": str(contact_sheet) if ok else detail,
+        "detail": detail,
     })
 
     status_order = {"PASS": 0, "FAIL": 1, "STOP": 2}

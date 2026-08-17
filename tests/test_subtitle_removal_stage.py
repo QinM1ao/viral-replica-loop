@@ -254,6 +254,25 @@ class SubtitleRemovalStageTests(unittest.TestCase):
         )
         return checker_qc
 
+    def pass_subtitle_removal_ledger(self, root):
+        ledger = build_stage_ledger(
+            root,
+            {"id": "job-001"},
+            "subtitle_removal",
+        )
+        self.write_bound_checker(
+            root,
+            "subtitle_removal",
+            ledger["semantic_review_request"],
+        )
+        ledger = build_stage_ledger(
+            root,
+            {"id": "job-001"},
+            "subtitle_removal",
+        )
+        self.assertEqual(ledger["overall"], "PASS")
+        return ledger
+
     def test_finishing_advances_through_conditional_subtitle_stage(self):
         self.assertEqual(self.rules["finishing"]["next_expected"], "subtitle_removal")
         stage = self.rules["subtitle_removal"]
@@ -607,6 +626,11 @@ class SubtitleRemovalStageTests(unittest.TestCase):
                 [family["name"] for family in request["families"]],
                 ["subtitle_presence_classification"],
             )
+            checks = request["families"][0]["scope"]["checks"]
+            self.assertIn(
+                "reject obvious wrong person, wrong product, broken material, or visible seam break",
+                checks,
+            )
 
     def test_burned_in_detection_cannot_be_marked_skipped(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -748,6 +772,7 @@ class SubtitleRemovalStageTests(unittest.TestCase):
             removal_path = self.write_removal_report(
                 root, detection, action="mediakit_pro", paid_tasks=1
             )
+            self.pass_subtitle_removal_ledger(root)
             removal = json.loads(removal_path.read_text(encoding="utf-8"))
             final_dir = root / "output" / "job-001" / "final"
             final_qc_md = final_dir / "final_qc.md"
@@ -792,6 +817,56 @@ class SubtitleRemovalStageTests(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
+            run_next_loop_round.preflight_pass_recording(
+                root,
+                {"id": "job-001"},
+                {"canonical_stage": "final_qc"},
+                args,
+            )
+
+    def test_final_qc_reuses_passing_subtitle_scan_without_revalidating_frames(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            detection = self.write_detection(root, "clean")
+            removal_path = self.write_removal_report(
+                root,
+                detection,
+                action="skipped_clean",
+                paid_tasks=0,
+            )
+            self.pass_subtitle_removal_ledger(root)
+
+            detection_report = json.loads(detection.read_text(encoding="utf-8"))
+            for frame in detection_report["evidence_frames"]:
+                Path(frame["path"]).unlink()
+
+            removal = json.loads(removal_path.read_text(encoding="utf-8"))
+            active_video = Path(removal["output_video"])
+            final_dir = root / "output" / "job-001" / "final"
+            final_qc_md = final_dir / "final_qc.md"
+            final_qc_json = final_dir / "final_qc.json"
+            final_qc_md.write_text("PASS\n", encoding="utf-8")
+            final_qc_json.write_text(
+                json.dumps(
+                    {
+                        "overall": "PASS",
+                        "videos": [
+                            {
+                                "path": str(active_video),
+                                "sha256": sha256(active_video),
+                            }
+                        ],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            args = Namespace(
+                record_gate_result="PASS",
+                artifact=str(final_qc_md),
+                dry_run=False,
+            )
+
             run_next_loop_round.preflight_pass_recording(
                 root,
                 {"id": "job-001"},

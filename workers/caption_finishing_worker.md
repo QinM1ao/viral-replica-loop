@@ -17,7 +17,7 @@ to the immutable video that already passed `final_qc`.
 
 Read and follow:
 
-`~/.codex/skills/source-faithful-captions/SKILL.md`
+`/Users/qmio/.codex/skills/source-faithful-captions/SKILL.md`
 
 The explicit caption request is approval to perform the local HyperFrames
 render. It is not approval for another Seedance or paid MediaKit task.

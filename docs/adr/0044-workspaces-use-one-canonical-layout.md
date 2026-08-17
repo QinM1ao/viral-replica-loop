@@ -1,0 +1,3 @@
+# Workspaces Use One Canonical Layout
+
+Every Client Workspace and the maintainer's `workspace-dev/` use the same versioned Canonical Workspace Layout: `workspace.yaml`; reusable `references/products/`, `references/people/`, `references/videos/`, and `references/audio/`; complete `jobs/<job-id>/input/`, `work/`, `qc/`, and `delivery/` archives; a customer-facing `deliveries/` projection; and a hidden `.viral-replica/` system area containing `state/`, rebuildable `cache/`, and rebuildable `runtime/`. Stable English directory names are the machine-readable contract, while Chinese READMEs and plugin-facing labels explain each area. Plugin source and installed plugin files never enter this layout.

@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 import time
+from datetime import datetime
 from pathlib import Path
 
 from qc_outcomes import blocker_category, outcome_for_result, validate_outcome
@@ -31,6 +32,8 @@ OPTIONAL_FIELDS = [
     "Why not fail",
     "Family results",
     "Line edit results",
+    "Risk request id",
+    "Risk request sha256",
 ]
 
 VISUAL_GATE_NAMES = {
@@ -249,7 +252,13 @@ def review_report(review_path, gate_path=None):
     }
 
 
-def bind_risk_request(report, request_path, root=None):
+def bind_risk_request(
+    report,
+    request_path,
+    root=None,
+    *,
+    require_declared_request=False,
+):
     root = Path(root or ".").resolve()
     try:
         request_bytes = request_path.read_bytes()
@@ -277,6 +286,22 @@ def bind_risk_request(report, request_path, root=None):
         if isinstance(edit, dict) and str(edit.get("id") or "")
     }
     fields = report.get("fields") or {}
+    request_sha256 = hashlib.sha256(request_bytes).hexdigest()
+    declared_request_valid = (
+        str(fields.get("Risk request id") or "") == str(request.get("request_id") or "")
+        and str(fields.get("Risk request sha256") or "") == request_sha256
+    )
+    if require_declared_request:
+        report["checks"].append({
+            "name": "qc_risk_review_declared_request",
+            "status": "PASS" if declared_request_valid else "STOP",
+            "detail": (
+                f"declared_id={fields.get('Risk request id')!r}, "
+                f"current_id={request.get('request_id')!r}, "
+                f"declared_sha256={fields.get('Risk request sha256')!r}, "
+                f"current_sha256={request_sha256!r}"
+            ),
+        })
     unified_visual_request = request.get("request_type") == "storyboard_visual_acceptance"
     request_id_valid = True
     context_valid = True
@@ -316,6 +341,7 @@ def bind_risk_request(report, request_path, root=None):
         and str(request.get("stage") or "") == str(fields.get("Stage") or "")
         and request_id_valid
         and context_valid
+        and (declared_request_valid or not require_declared_request)
     )
     report["checks"].append({
         "name": "qc_risk_request_binding",
@@ -432,6 +458,12 @@ def bind_risk_request(report, request_path, root=None):
             report["structure_status"] = "STOP"
             return report
 
+    try:
+        request_started_at = datetime.fromisoformat(
+            str(request.get("created_at") or "")
+        ).timestamp()
+    except ValueError:
+        request_started_at = request_path.stat().st_mtime
     report["qc_risk_review"] = {
         "request_path": str(request_path),
         "request_sha256": hashlib.sha256(request_bytes).hexdigest(),
@@ -442,7 +474,7 @@ def bind_risk_request(report, request_path, root=None):
         "canonical_compare_context": request.get("canonical_compare_context"),
         "line_edit_results": line_edit_results,
         "invocation_count": 1,
-        "wait_seconds": max(0.0, time.time() - request_path.stat().st_mtime),
+        "wait_seconds": max(0.0, time.time() - request_started_at),
     }
     return report
 

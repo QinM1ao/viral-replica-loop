@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "kind": "zero_submission_provider_recording",
+  "sealed": true,
+  "request_path": "provider/request.json",
+  "request_file_sha256": "0505cc39c68365c254a4faca9593d321522901f234a325864eb39f1b1453f10f",
+  "request_summary_sha256": "b6871ce250b2c5bef2d9f943842a5113dbe3655894c36db39626c5494c1398e9",
+  "response_path": "provider/response.json",
+  "response_file_sha256": "8cb746e71235056752b0d571ff956d2769e1a13ae29fbac5bb07f24b786bb7c4",
+  "response_summary_sha256": "9c0a6fdfe3f146aef3871028401dcfa86077bf97a57d6e94d591f0ae4d5245f8",
+  "valid_until": "2099-12-31T23:59:59Z",
+  "seal_sha256": "672dd1195041e32ed287fcd93f9b4a59fe1eb194893bb2a25c2d329d42a282f6",
+  "write_capability": false,
+  "network_capability": false,
+  "submit_capability": false,
+  "golden_refresh_capability": false
+}

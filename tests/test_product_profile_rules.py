@@ -449,6 +449,7 @@ class ProductProfileRulesTest(unittest.TestCase):
         self.assertNotIn("single_identity", toner["review_flags"]["required"])
         self.assertIn("PORTULACA OLERACEA FERMENTED ESSENCE TONER", toner["visible_text_patterns"])
         self.assertIn("shot_labels", toner["source_storyboard_controls"])
+        self.assertEqual(toner["source_action_policy"], "preserve_if_physically_compatible")
         self.assertNotIn("clay_mask", json.dumps(toner, ensure_ascii=False))
         self.assertIn("category:clay_mask", clay["loaded_rules"])
         self.assertTrue(clay["checks"]["requires_mud_checks"])

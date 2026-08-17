@@ -1,0 +1,133 @@
+{
+  "job_id": "job-001",
+  "stage": "image_batch_qc",
+  "image_route": "matpool_gpt_image_2_edit",
+  "person_asset_mode": "storyboard_derived",
+  "identity_strategy": "reuse_storyboard_derived_roles",
+  "source_storyboard_controls": [
+    "layout",
+    "shot_order",
+    "framing",
+    "action_rhythm",
+    "scene_family",
+    "shot_labels"
+  ],
+  "source_storyboard_must_not_control": [
+    "old_product",
+    "old_tool",
+    "old_host_identity",
+    "old_mud_color",
+    "subtitles"
+  ],
+  "api_effect_baseline": {
+    "source": "matpool_gpt_image_2_edit",
+    "preserve_api_route": true,
+    "reference_order": [
+      "source_storyboard",
+      "product_front",
+      "product_open_mud",
+      "identity_role_host",
+      "identity_ref"
+    ],
+    "generation_settings": {
+      "quality": "medium",
+      "resolution": "1K",
+      "ratio_source": "output/job-001/storyboard_source_refs/source_storyboard_part1.png"
+    }
+  },
+  "preserve_api_route": true,
+  "matpool_uses_real_image_inputs": true,
+  "reference_order": [
+    "source_storyboard",
+    "product_front",
+    "product_open_mud",
+    "identity_role_host",
+    "identity_ref"
+  ],
+  "codex_generation_settings": {
+    "quality": "medium",
+    "resolution": "1K",
+    "ratio_source": "output/job-001/storyboard_source_refs/source_storyboard_part1.png",
+    "reference_order": [
+      "source_storyboard",
+      "product_front",
+      "product_open_mud",
+      "identity_role_host",
+      "identity_ref"
+    ],
+    "size": "1024x1536"
+  },
+  "parts": [
+    {
+      "part": "part1",
+      "source_storyboard": "output/job-001/storyboard_source_refs/source_storyboard_part1.png",
+      "candidate_path": "output/job-001/final-images/part1_seedance_ref.png",
+      "prompt_path": "output/job-001/image-batch/prompts/part1.txt",
+      "person_asset_mode": "storyboard_derived",
+      "identity_strategy": "reuse_storyboard_derived_roles",
+      "role_map": "output/job-001/visual-assets/storyboard_derived_role_map.json",
+      "role_map_loaded_to_context": true,
+      "refs_loaded": {
+        "source_storyboard": {
+          "path": "output/job-001/storyboard_source_refs/source_storyboard_part1.png",
+          "loaded_to_context": true
+        },
+        "product_front": {
+          "path": "output/job-001/reusable/product/front.png",
+          "loaded_to_context": true
+        },
+        "product_open_mud": {
+          "path": "output/job-001/reusable/product/open.png",
+          "loaded_to_context": true
+        },
+        "identity_ref": {
+          "path": "output/job-001/reusable/identity/ref.png",
+          "loaded_to_context": true
+        },
+        "identity_role_host": {
+          "path": "output/job-001/reusable/identity/ref.png",
+          "loaded_to_context": true
+        }
+      },
+      "source_risks": [],
+      "required_translations": [],
+      "review": {
+        "layout_matches_source": true,
+        "source_aspect_preserved": true,
+        "source_scene_preserved": true,
+        "no_identity_reference_background": true,
+        "no_product_reference_background": true,
+        "same_identity_as_reference": true,
+        "primary_identity_consistent": true,
+        "primary_identity_only_on_target_role": true,
+        "secondary_characters_keep_source_role_gender": true,
+        "no_source_host_identity": true,
+        "target_product_packaging": true,
+        "target_product_label": true,
+        "no_old_product": true,
+        "no_subtitles_or_text": true
+      },
+      "reference_order": [
+        "source_storyboard",
+        "product_front",
+        "product_open_mud",
+        "identity_role_host",
+        "identity_ref"
+      ],
+      "codex_generation_settings": {
+        "quality": "medium",
+        "resolution": "1K",
+        "ratio_source": "output/job-001/storyboard_source_refs/source_storyboard_part1.png",
+        "reference_order": [
+          "source_storyboard",
+          "product_front",
+          "product_open_mud",
+          "identity_role_host",
+          "identity_ref"
+        ],
+        "size": "1024x1536"
+      },
+      "asset_type": "AI改好分镜图"
+    }
+  ]
+}

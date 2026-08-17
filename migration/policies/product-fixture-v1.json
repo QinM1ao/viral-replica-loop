@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "policy_id": "product-fixture-v1",
+  "description": "Non-client Product Fixture and private legacy observation policy for Behavioral Parity.",
+  "fixture_root": "assets/fixtures/",
+  "required_origin_manifest": "fixture_origin.json",
+  "required_origin_fields": [
+    "fixture_id",
+    "source",
+    "license_or_authorization",
+    "non_client",
+    "content_summary",
+    "expected_logical_roles",
+    "sha256",
+    "creation_tool",
+    "redistribution_rights"
+  ],
+  "allowed_fixture_families": [
+    "PF-01 core-audible-source-locked",
+    "PF-02 branch-table",
+    "PF-03 failure-mutations",
+    "PF-04 local-finalization"
+  ],
+  "forbidden_content": [
+    "customer media",
+    "historical Job screenshots",
+    "identifiable real people",
+    "provider credentials",
+    "provider task tokens",
+    "signed URLs",
+    "maintainer absolute paths",
+    "customer identity"
+  ],
+  "legacy_observation_anchors": {
+    "job-011": {
+      "classification": "legacy_archive_content",
+      "use": "private read-only byte and no-op observation",
+      "product_fixture": false,
+      "provider_replay": false
+    },
+    "job-013": {
+      "classification": "legacy_archive_content",
+      "use": "private read-only lifecycle, finishing, subtitle, and delivery observation",
+      "product_fixture": false,
+      "provider_replay": false
+    }
+  },
+  "excluded_historical_cases": [
+    "job-001",
+    "job-002",
+    "job-012",
+    "examples/kongfengchun-reference-job-008"
+  ],
+  "promotion_contract": {
+    "rights_cleared": true,
+    "de_customerized": true,
+    "independently_proven": true,
+    "new_fixture_identity_required": true
+  },
+  "provider_recorder": {
+    "mode": "sealed_offline_replay",
+    "exact_request_bindings": [
+      "frozen_input",
+      "provider",
+      "model",
+      "parameters",
+      "approval",
+      "reference_order"
+    ],
+    "hard_stops": [
+      "unmatched_request",
+      "request_expired",
+      "network_forbidden",
+      "real_submit_forbidden",
+      "golden_refresh_forbidden"
+    ],
+    "paid_task_limit": 0,
+    "media_generation_task_limit": 0
+  }
+}

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540">
+  <rect width="960" height="540" fill="#f4f0e8"/>
+  <g stroke="#24313a" stroke-width="6" fill="#d8e7de">
+    <rect x="30" y="45" width="280" height="420" rx="18"/>
+    <rect x="340" y="45" width="280" height="420" rx="18"/>
+    <rect x="650" y="45" width="280" height="420" rx="18"/>
+  </g>
+  <g fill="#24313a" font-family="sans-serif" font-size="28" font-weight="700">
+    <text x="55" y="90">Shot 01 · Open</text>
+    <text x="365" y="90">Shot 02 · Texture</text>
+    <text x="675" y="90">Shot 03 · Wipe</text>
+  </g>
+  <g stroke="#24313a" stroke-width="10" fill="#ffffff">
+    <path d="M105 180h130v170H105z"/>
+    <path d="M100 165h140v35H100z"/>
+    <circle cx="480" cy="265" r="82"/>
+    <path d="M405 265h150"/>
+    <path d="M720 210h140v120H720z"/>
+    <path d="M700 360l180-190"/>
+  </g>
+  <g fill="#547b68" font-family="sans-serif" font-size="22">
+    <text x="85" y="420">open container</text>
+    <text x="405" y="420">show material</text>
+    <text x="720" y="420">single wipe</text>
+  </g>
+</svg>

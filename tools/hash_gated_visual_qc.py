@@ -85,6 +85,10 @@ def display_path(root, path):
     if path is None:
         return ""
     try:
+        return str(path.relative_to(root))
+    except ValueError:
+        pass
+    try:
         return str(path.resolve().relative_to(root.resolve()))
     except (FileNotFoundError, ValueError):
         return str(path)

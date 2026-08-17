@@ -131,6 +131,42 @@ class SourceCompositionFanoutTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "must PASS"):
             self.build_plan()
 
+    def test_canonical_job_output_can_be_bound_outside_legacy_output_tree(self):
+        state_root = self.root / ".viral-replica" / "state"
+        state_root.mkdir(parents=True)
+        canonical_output = self.root / "jobs" / self.job_id / "work"
+        rhythm = canonical_output / "剧情分析" / "source_rhythm.json"
+        rhythm.parent.mkdir(parents=True)
+        rhythm.write_bytes(self.rhythm.read_bytes())
+        rhythm_sha = sha256(rhythm)
+        qc = canonical_output / "checks" / "source_rhythm_qc.json"
+        qc.parent.mkdir(parents=True)
+        qc.write_text(
+            json.dumps(
+                {
+                    "overall": "PASS",
+                    "issues": [],
+                    "source_rhythm": str(rhythm.resolve()),
+                    "source_rhythm_sha256": rhythm_sha,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        plan = self.build_plan(
+            root=state_root,
+            source_rhythm_path=rhythm,
+            source_rhythm_sha256=rhythm_sha,
+            source_rhythm_qc_path=qc,
+            job_output_root=canonical_output,
+            output_root=canonical_output / "source-composition" / "composition-v1",
+        )
+
+        self.assertTrue(
+            Path(plan["output_root"]).is_relative_to(canonical_output.resolve())
+        )
+
     def test_build_plan_rejects_old_passing_qc_after_same_path_rhythm_changes(self):
         original_qc_mtime = self.qc.stat().st_mtime_ns
         self.rhythm.write_text(
@@ -178,7 +214,7 @@ class SourceCompositionFanoutTest(unittest.TestCase):
                 "family": "role_product_seam_audit",
                 "command": ["python3", "audit.py"],
                 "depends_on": ["timeline", "shot"],
-                "resource_class": "qwen_mlx",
+                "resource_class": "serial",
             },
             {
                 "task_id": "part1",
@@ -212,7 +248,15 @@ class SourceCompositionFanoutTest(unittest.TestCase):
                 "custom/part1"
             ),
         )
-        self.assertEqual(plan["resource_limits"]["qwen_mlx"], 1)
+        self.assertEqual(plan["resource_limits"]["serial"], 1)
+
+        legacy = dict(tasks[3], resource_class="qwen_mlx", depends_on=[])
+        migrated = self.build_plan(
+            tasks=[legacy],
+            resource_limits={"qwen_mlx": 9},
+        )
+        self.assertEqual(migrated["tasks"][0]["resource_class"], "serial")
+        self.assertEqual(migrated["resource_limits"]["serial"], 1)
 
         invalid = self.task()
         invalid["family"] = "source_rhythm_author"
@@ -265,13 +309,13 @@ class SourceCompositionFanoutTest(unittest.TestCase):
     def test_run_plan_respects_dag_pool_and_resource_limits_and_writes_stable_bundle(self):
         tasks = []
         for task_id, family, resource_class, dependencies in [
-            ("qwen-a", "story_view", "qwen_mlx", []),
-            ("qwen-b", "timeline_view", "qwen_mlx", []),
+            ("serial-a", "story_view", "serial", []),
+            ("serial-b", "timeline_view", "serial", []),
             ("higress-a", "role_product_seam_audit", "higress", []),
             ("higress-b", "role_product_seam_audit", "higress", []),
             ("ffmpeg-a", "part_storyboard_rebuild", "ffmpeg", []),
             ("ffmpeg-b", "part_storyboard_rebuild", "ffmpeg", []),
-            ("final", "shot_view", "cpu", ["qwen-a", "higress-a"]),
+            ("final", "shot_view", "cpu", ["serial-a", "higress-a"]),
         ]:
             tasks.append(
                 {
@@ -284,9 +328,9 @@ class SourceCompositionFanoutTest(unittest.TestCase):
             )
         plan = self.build_plan(
             tasks=tasks,
-            resource_limits={"higress": 2, "ffmpeg": 2, "qwen_mlx": 99},
+            resource_limits={"higress": 2, "ffmpeg": 2, "serial": 99},
         )
-        active = {"qwen_mlx": 0, "higress": 0, "ffmpeg": 0, "cpu": 0}
+        active = {"serial": 0, "higress": 0, "ffmpeg": 0, "cpu": 0}
         peak = dict(active)
         finished = set()
         start_dependencies = {}
@@ -326,10 +370,10 @@ class SourceCompositionFanoutTest(unittest.TestCase):
         )
 
         self.assertEqual(bundle["overall"], "PASS")
-        self.assertEqual(peak["qwen_mlx"], 1)
+        self.assertEqual(peak["serial"], 1)
         self.assertEqual(peak["higress"], 2)
         self.assertLessEqual(peak["ffmpeg"], 2)
-        self.assertIn("qwen-a", start_dependencies["final"])
+        self.assertIn("serial-a", start_dependencies["final"])
         self.assertIn("higress-a", start_dependencies["final"])
         self.assertEqual(
             [item["task_id"] for item in bundle["tasks"]],

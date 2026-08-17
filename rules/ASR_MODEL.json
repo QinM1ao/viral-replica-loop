@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "provider": "elevenlabs",
+  "gateway": "wujie_higress",
+  "endpoint": "https://higress-api.wujieai.com/elevenlabs/v1/speech-to-text",
+  "model": "scribe_v1",
+  "language_code": "zh",
+  "diarize": true,
+  "tag_audio_events": true,
+  "timestamps_granularity": "word",
+  "timeout_seconds": 300
+}

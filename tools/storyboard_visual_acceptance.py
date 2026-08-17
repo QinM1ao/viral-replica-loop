@@ -91,7 +91,7 @@ def resolve_output(root, raw, default):
     path = Path(raw) if raw else default
     if not path.is_absolute():
         path = root / path
-    return path.resolve()
+    return path
 
 
 def add_check(checks, name, status, detail):
@@ -727,7 +727,7 @@ def main():
         args.manifest,
         root / "output" / args.job_id / "visual-assets" / "approved_visual_manifest.json",
     )
-    profile_path = (root / "output" / args.job_id / "product_profile.json").resolve()
+    profile_path = root / "output" / args.job_id / "product_profile.json"
     report_path = resolve_output(
         root,
         args.out_json,

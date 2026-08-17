@@ -107,7 +107,10 @@ cat > "$OUT/RUNNER_STATE.json" <<'EOF'
 }
 EOF
 rm -f "$OUT/RUNNER_LAST_DECISION.md" "$OUT/RUNNER_LAST_TRANSITION.md"
-rm -f "$OUT/.run-loop.lock" "$OUT/.sync-inbox-to-jobs.lock"
+rm -f \
+  "$OUT/.run-loop.lock" \
+  "$OUT/.sync-inbox-to-jobs.lock" \
+  "$OUT/.job-intake.lock"
 
 if [[ -n "$REFERENCE_JOB" ]]; then
   python3 - "$ROOT" "$OUT" "$REFERENCE_JOB" <<'PY'

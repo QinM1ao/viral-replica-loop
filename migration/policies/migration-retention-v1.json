@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "policy_id": "migration-retention-v1",
+  "description": "Four-way Migration Retention contract for building the Parallel Product Build from actual legacy bytes.",
+  "roles": {
+    "plugin_content": {
+      "destination_boundary": "viral-replica/",
+      "meaning": "Self-contained product implementation needed with an empty or deleted Development Workspace."
+    },
+    "development_workspace_content": {
+      "destination_boundary": "workspace-dev/",
+      "meaning": "Mutable references, active work, selected Job state, QC evidence, deliveries, and authorized Workspace Profiles."
+    },
+    "legacy_archive_content": {
+      "destination_boundary": "workspace-dev/legacy/",
+      "meaning": "Read-only historical Jobs, experiments, research, reports, and evidence that must not be normalized into current schemas."
+    },
+    "excluded_rebuildable_content": {
+      "destination_boundary": null,
+      "meaning": "Caches, virtual environments, model weights, duplicate transcodes, temporary probes, and other material rebuilt from a declared contract."
+    }
+  },
+  "classification_contract": {
+    "exactly_one_role_per_object": true,
+    "mixed_directories_require_per_object_classification": true,
+    "unclassified_object_result": "STOP",
+    "overlapping_classification_result": "STOP",
+    "directory_name_inference_allowed": false,
+    "whole_tree_copy_allowed": false,
+    "git_head_export_allowed": false,
+    "tracked_plus_untracked_export_allowed": false,
+    "source_authority": "current filesystem bytes"
+  },
+  "copy_contract": {
+    "manifest_required": true,
+    "same_filesystem_staging_required": true,
+    "full_validation_before_commit": true,
+    "atomic_commit_required": true,
+    "repeat_result": "identical_result_or_safe_noop",
+    "follow_unbounded_links": false,
+    "overwrite_target_conflicts": false,
+    "source_digest_must_match_manifest": true,
+    "source_change_during_copy": "STOP",
+    "undeclared_link": "STOP",
+    "boundary_escape": "STOP",
+    "target_conflict": "STOP",
+    "digest_mismatch": "STOP"
+  },
+  "source_protection": {
+    "delete_source": false,
+    "rewrite_legacy_control_state": false,
+    "replay_jobs": false,
+    "refresh_remote_urls": false,
+    "submit_provider_tasks": false,
+    "normalize_historical_evidence": false
+  },
+  "boundary_contract": {
+    "plugin_source_repository_has_independent_git_root": true,
+    "development_workspace_is_plugin_repository_sibling": true,
+    "development_workspace_inside_plugin_git_root": false,
+    "legacy_checkout_remains_unchanged": true,
+    "workspace_deletion_must_not_damage_plugin_source": true
+  }
+}

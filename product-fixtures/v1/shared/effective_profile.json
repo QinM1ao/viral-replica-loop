@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "effective_profile_id": "fixture-generic-source-locked-v1",
+  "components": [
+    {
+      "component_id": "generic-core",
+      "version": "fixture-1",
+      "role": "source-lock-and-approval-invariants"
+    },
+    {
+      "component_id": "fixture-tabletop-product",
+      "version": "1.0.0",
+      "role": "synthetic-product-facts"
+    },
+    {
+      "component_id": "fixture-job-facts",
+      "version": "1",
+      "role": "necessary-only-replacement"
+    }
+  ],
+  "replication_mode": "source_locked",
+  "edit_scope": "necessary_only",
+  "product_profile_overlay": {
+    "prompt_required_groups": [
+      {
+        "name": "target_product",
+        "patterns": [
+          "teal fixture product"
+        ]
+      }
+    ]
+  }
+}

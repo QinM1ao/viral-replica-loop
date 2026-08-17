@@ -14,8 +14,10 @@ from seedance_request_contract import (  # noqa: E402
     build_taskcode_request,
     inspect_taskcode_request,
     reference_audio_urls,
+    reference_visual_urls,
     require_taskcode_request,
 )
+from seedance_taskcode_runner import validate_active_asset_manifest  # noqa: E402
 
 
 MODEL = "ep-20260521101914-nwv8j"
@@ -78,6 +80,154 @@ class SeedanceTaskcodeRequestContractTest(unittest.TestCase):
         self.assertEqual(
             reference_audio_urls(request),
             ["https://example.com/reference.mp3"],
+        )
+
+    def test_verified_all_reference_route_requires_asset_refs_for_images_and_video(self):
+        param = provider_param(image_count=2, prompt="使用@图片1、@图片2和@视频1，参考@音频1。")
+        param["content"][1]["image_url"]["url"] = "asset://asset-image-1"
+        param["content"][2]["image_url"]["url"] = "asset://asset-image-2"
+        param["content"].insert(
+            3,
+            {
+                "type": "video_url",
+                "video_url": {"url": "asset://asset-video-1"},
+                "role": "reference_video",
+            },
+        )
+        request = build_taskcode_request(param, task_code=2509)
+
+        report = inspect_taskcode_request(
+            request,
+            for_submission=True,
+            require_active_visual_assets=True,
+        )
+
+        self.assertEqual(report["overall"], "PASS")
+        self.assertEqual(report["metrics"]["video_count"], 1)
+        self.assertEqual(report["metrics"]["video_refs"], [1])
+
+    def test_verified_all_reference_route_rejects_https_visuals(self):
+        request = build_taskcode_request(
+            provider_param(image_count=1, prompt="使用@图片1并参考@音频1。"),
+            task_code=2509,
+        )
+
+        report = inspect_taskcode_request(
+            request,
+            for_submission=True,
+            require_active_visual_assets=True,
+        )
+
+        self.assertEqual(report["overall"], "FAIL")
+        self.assertEqual(
+            next(
+                check
+                for check in report["checks"]
+                if check["name"] == "active_visual_asset_refs"
+            )["status"],
+            "FAIL",
+        )
+
+    def test_submission_rejects_public_wav_reference_audio(self):
+        param = provider_param(image_count=1, prompt="使用@图片1并参考@音频1。")
+        param["content"][1]["image_url"]["url"] = "asset://asset-image-1"
+        param["content"][-1]["audio_url"]["url"] = (
+            "https://example.com/reference.wav"
+        )
+        request = build_taskcode_request(param, task_code=2509)
+
+        report = inspect_taskcode_request(
+            request,
+            for_submission=True,
+            require_active_visual_assets=True,
+        )
+
+        self.assertEqual(report["overall"], "FAIL")
+        self.assertEqual(
+            next(
+                check
+                for check in report["checks"]
+                if check["name"] == "public_mp3_reference_audio"
+            )["status"],
+            "FAIL",
+        )
+
+    def test_active_manifest_must_exactly_match_all_request_visuals(self):
+        param = provider_param(image_count=2, prompt="使用@图片1、@图片2和@视频1，参考@音频1。")
+        param["content"][1]["image_url"]["url"] = "asset://asset-image-1"
+        param["content"][2]["image_url"]["url"] = "asset://asset-image-2"
+        param["content"].insert(
+            3,
+            {
+                "type": "video_url",
+                "video_url": {"url": "asset://asset-video-1"},
+                "role": "reference_video",
+            },
+        )
+        request = build_taskcode_request(param, task_code=2509)
+        self.assertEqual(
+            reference_visual_urls(request),
+            [
+                "asset://asset-image-1",
+                "asset://asset-image-2",
+                "asset://asset-video-1",
+            ],
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            manifest_path = Path(directory) / "part1_asset_binding.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "visual_assets": [
+                            {
+                                "asset_ref": "asset://asset-image-1",
+                                "status": "Active",
+                            },
+                            {
+                                "asset_ref": "asset://asset-image-2",
+                                "status": "Active",
+                            },
+                            {
+                                "asset_ref": "asset://asset-video-1",
+                                "status": "Active",
+                            },
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            report = validate_active_asset_manifest(request, manifest_path)
+            self.assertEqual(report["overall"], "PASS")
+            data = json.loads(manifest_path.read_text(encoding="utf-8"))
+            data["visual_assets"].pop()
+            manifest_path.write_text(json.dumps(data), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "exactly match"):
+                validate_active_asset_manifest(request, manifest_path)
+
+    def test_verified_route_rejects_minimax_h3_prompt_wrapper(self):
+        param = provider_param(
+            image_count=1,
+            prompt=(
+                "subject_definitions:\n<Picture 1> is a person.\n"
+                "detailed_description:\n[Shot 1] copy <Video 1> and <Audio 1>. "
+                * 8
+            ),
+        )
+        request = build_taskcode_request(param, task_code=2509)
+
+        report = inspect_taskcode_request(
+            request,
+            require_seedance_prompt_format=True,
+        )
+
+        self.assertEqual(report["overall"], "FAIL")
+        self.assertEqual(
+            next(
+                check
+                for check in report["checks"]
+                if check["name"] == "seedance_prompt_format"
+            )["status"],
+            "FAIL",
         )
 
     def test_prepared_audio_placeholder_passes_pack_qc_but_cannot_be_submitted(self):

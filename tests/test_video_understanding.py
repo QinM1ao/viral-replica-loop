@@ -138,7 +138,15 @@ class VideoUnderstandingTest(unittest.TestCase):
         model_output = {
             "summary": "A presenter demonstrates a product.",
             "story_structure": ["hook", "demo"],
-            "timeline": [],
+            "people_mode": "single_primary",
+            "timeline": [
+                {
+                    "start_seconds": 0.0,
+                    "end_seconds": 1.0,
+                    "visible_roles": ["presenter"],
+                    "expression_and_gaze": "自然看向镜头，眉眼放松",
+                }
+            ],
             "uncertainties": [],
         }
 
@@ -173,6 +181,43 @@ class VideoUnderstandingTest(unittest.TestCase):
             self.assertTrue((out_dir / "analysis.md").is_file())
             self.assertTrue((out_dir / "raw_response.json").is_file())
 
+    def test_full_analysis_requires_people_mode_and_expression_without_an_extra_call(self):
+        valid = {
+            "summary": "Two presenters compare products.",
+            "people_mode": "multi_person",
+            "timeline": [
+                {
+                    "start_seconds": 0.0,
+                    "end_seconds": 1.0,
+                    "visible_roles": ["host", "guest"],
+                    "expression_and_gaze": "两人自然对视，来宾轻微点头",
+                }
+            ],
+        }
+
+        self.assertEqual(
+            video_understanding.validate_full_analysis(valid),
+            valid,
+        )
+        with self.assertRaisesRegex(ValueError, "people_mode"):
+            video_understanding.validate_full_analysis(
+                {"summary": "missing mode", "timeline": []}
+            )
+        with self.assertRaisesRegex(ValueError, "expression_and_gaze"):
+            video_understanding.validate_full_analysis(
+                {
+                    "summary": "missing expression",
+                    "people_mode": "single_primary",
+                    "timeline": [
+                        {
+                            "start_seconds": 0.0,
+                            "end_seconds": 1.0,
+                            "visible_roles": ["presenter"],
+                        }
+                    ],
+                }
+            )
+
     def test_parse_json_content_accepts_fenced_json(self):
         parsed = video_understanding.parse_json_content("```json\n{\"summary\": \"ok\"}\n```")
         self.assertEqual(parsed, {"summary": "ok"})
@@ -199,6 +244,33 @@ class VideoUnderstandingTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(len(calls), 2)
         self.assertIn("choices", response)
+
+    def test_empty_content_is_retried_once(self):
+        calls = []
+
+        def handler(request):
+            calls.append(request)
+            if len(calls) == 1:
+                return httpx.Response(200, content=b"")
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {"message": {"content": '{"summary":"ok","timeline":[]}'}}
+                    ]
+                },
+            )
+
+        config = video_understanding.load_config()
+        client = httpx.Client(transport=httpx.MockTransport(handler))
+        with mock.patch.object(video_understanding.time, "sleep"):
+            response, status, _ = video_understanding.call_gateway(
+                {"model": config["model"]}, config, "test-key", client=client
+            )
+        client.close()
+        self.assertEqual(status, 200)
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(video_understanding.response_content(response))
 
 
 if __name__ == "__main__":

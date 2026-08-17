@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "kind": "zero_submission_provider_recording",
+  "sealed": true,
+  "request_path": "provider/image_request.json",
+  "request_file_sha256": "39582daa7242b4a6c4562d0d2817ed48d658cb94ff733b7f712c2b561e838673",
+  "request_summary_sha256": "4d919e15e04fd0137dea2fa0ba6cb883ec674b7908894867acb12b363e07fbbb",
+  "response_path": "provider/image_response.json",
+  "response_file_sha256": "af201f0db827edfe191f3ce3dc9aac10fe53d7c5a5bee9cc6aacbe0b16ae9cf6",
+  "response_summary_sha256": "7d00fda15407629ff9c89514982e9c9ecb7e6eff3a63fe0eb56eb1fdbed61c9e",
+  "valid_until": "2099-12-31T23:59:59Z",
+  "seal_sha256": "9c5032b78eedb542ff3b0839cb9d01ba4332c753d6f564e2e68e1e9785f459e5",
+  "write_capability": false,
+  "network_capability": false,
+  "submit_capability": false,
+  "golden_refresh_capability": false
+}

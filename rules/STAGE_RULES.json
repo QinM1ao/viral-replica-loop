@@ -1,5 +1,9 @@
 {
   "version": 1,
+  "initial": {
+    "status": "pending",
+    "next_stage": "source_blueprint"
+  },
   "terminal_statuses": [
     "done",
     "blocked"
@@ -10,6 +14,141 @@
     "seedance_generate",
     "submit_generation",
     "paid"
+  ],
+  "progress": [
+    {
+      "index": 1,
+      "label": "看懂原片",
+      "summary": "拆清楚原视频剧情、口播、镜头节奏和污染风险。",
+      "canonical": [
+        "asset_gate",
+        "source_blueprint",
+        "story_analysis",
+        "storyboard"
+      ],
+      "statuses": [
+        "pending",
+        "story_analyzed"
+      ],
+      "next_stages": [
+        "source_blueprint",
+        "story_analysis",
+        "storyboard"
+      ],
+      "status_prefixes": []
+    },
+    {
+      "index": 2,
+      "label": "改好分镜",
+      "summary": "一次性改完所有 Part 分镜，替换人物和产品，并去掉旧字幕/旧画面污染。",
+      "canonical": [
+        "image_sample",
+        "image_sample_review",
+        "image_batch_qc",
+        "afterwash_reference_review"
+      ],
+      "statuses": [
+        "storyboard_passed",
+        "sample_image_waiting_review",
+        "image_sample_approved",
+        "afterwash_ref_waiting_review",
+        "afterwash_ref_passed"
+      ],
+      "next_stages": [
+        "image_sample",
+        "image_sample_review",
+        "image_batch_qc",
+        "sample_image_waiting_review",
+        "afterwash_reference_review"
+      ],
+      "status_prefixes": []
+    },
+    {
+      "index": 3,
+      "label": "写视频脚本",
+      "summary": "写口播、缝点、Seedance 提示词和请求素材，并完成音频边界检查。",
+      "canonical": [
+        "voiceover",
+        "seam",
+        "seedance_prompt",
+        "audio_boundary_qc",
+        "request_qc",
+        "pre_seedance_pack"
+      ],
+      "statuses": [
+        "image_qc_passed",
+        "part2_storyboard_loop_passed",
+        "voiceover_done",
+        "seam_done",
+        "seedance_prompt_done",
+        "audio_boundary_qc_done"
+      ],
+      "next_stages": [
+        "voiceover",
+        "seam",
+        "seedance_prompt",
+        "audio_boundary_qc",
+        "request_qc",
+        "pre_seedance_pack"
+      ],
+      "status_prefixes": []
+    },
+    {
+      "index": 4,
+      "label": "生成视频",
+      "summary": "确认付费范围，提交或等待 Seedance，并下载各 Part 视频。",
+      "canonical": [
+        "cost_gate",
+        "generation_approval",
+        "generation"
+      ],
+      "statuses": [
+        "seedance_inputs_prepared",
+        "generation_approved"
+      ],
+      "next_stages": [
+        "generation_approval",
+        "generation"
+      ],
+      "status_prefixes": [
+        "seedance_inputs_prepared",
+        "seedance_generating"
+      ]
+    },
+    {
+      "index": 5,
+      "label": "质检交付",
+      "summary": "按明确剪辑计划收尾成片，跑技术 QC，交付最终视频或明确失败原因。",
+      "canonical": [
+        "finishing",
+        "subtitle_removal",
+        "final_qc",
+        "caption_finishing",
+        "terminal"
+      ],
+      "statuses": [
+        "finishing",
+        "subtitle_removal",
+        "final_qc",
+        "caption_finishing",
+        "done",
+        "blocked"
+      ],
+      "next_stages": [
+        "finishing",
+        "subtitle_removal",
+        "final_qc",
+        "caption_finishing",
+        "done",
+        "blocked"
+      ],
+      "status_prefixes": [
+        "finishing",
+        "subtitle_removal",
+        "final_qc",
+        "caption_finishing"
+      ]
+    }
   ],
   "rules": [
     {
@@ -24,7 +163,7 @@
       "worker": "$video-replication source blueprint + $viral-replica loop adapter",
       "worker_file": "workers/source_blueprint_worker.md",
       "script_file": "tools/prepare_source_blueprint.py",
-      "action": "Build one source blueprint round: prepare ASR, contact sheet, Part storyboards, and measured source rhythm in parallel; author evidence-backed rhythm beats and pass source_rhythm_qc before writing the downstream story/shot views.",
+      "action": "Run one continuous source blueprint operation: prepare ASR, contact sheet, semantic evidence, cuts, and local visual evidence in parallel; treat the preparation report only as an internal checkpoint; author the complete Source Rhythm, pass rhythm QC, submit one all-beat visual review, repair and revalidate only failed beats while reusing passed evidence, rebuild the final rhythm-aware 12-panel Part storyboards, and pass the existing gate without user confirmation. Do not start image or video generation before advancing to storyboard_passed.",
       "next_expected": "storyboard_passed",
       "gate": "gates/source_blueprint_gate.md"
     },

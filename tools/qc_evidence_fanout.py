@@ -4,6 +4,7 @@
 import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
 import time
@@ -65,7 +66,7 @@ def validate_report_path(root, evidence_dir, report_path):
         raise ValueError(
             f"report_path must be inside {evidence_dir.as_posix()}"
         ) from None
-    return target.relative_to(root).as_posix()
+    return Path(os.path.normpath(str(raw))).as_posix()
 
 
 def execution_packet(task):

@@ -31,16 +31,17 @@ ALLOWED_FAMILIES = frozenset(
 )
 RESOURCE_LIMIT_CAPS = {
     "cpu": 8,
-    "qwen_mlx": 1,
+    "serial": 1,
     "higress": 4,
     "ffmpeg": 4,
 }
 DEFAULT_RESOURCE_LIMITS = {
     "cpu": 8,
-    "qwen_mlx": 1,
+    "serial": 1,
     "higress": 2,
     "ffmpeg": 2,
 }
+LEGACY_RESOURCE_ALIASES = {"qwen_mlx": "serial"}
 COORDINATOR_ONLY_PATHS = (
     "jobs.csv",
     "RUNNER_STATE.json",
@@ -154,13 +155,14 @@ def _validate_source_lock(
 
 def _resource_limits(configured):
     limits = dict(DEFAULT_RESOURCE_LIMITS)
-    for name, value in (configured or {}).items():
+    for legacy_name, value in (configured or {}).items():
+        name = LEGACY_RESOURCE_ALIASES.get(legacy_name, legacy_name)
         if name not in RESOURCE_LIMIT_CAPS:
-            raise ValueError(f"unknown resource class limit: {name}")
+            raise ValueError(f"unknown resource class limit: {legacy_name}")
         if not isinstance(value, int) or isinstance(value, bool) or value < 1:
             raise ValueError(f"{name} resource limit must be a positive integer")
         limits[name] = min(value, RESOURCE_LIMIT_CAPS[name])
-    limits["qwen_mlx"] = 1
+    limits["serial"] = 1
     return limits
 
 
@@ -224,6 +226,9 @@ def _validate_tasks(root, bundle_root, tasks):
         ):
             raise ValueError(f"{task_id} depends_on must be a string list")
         resource_class = str(raw.get("resource_class") or "cpu").strip()
+        resource_class = LEGACY_RESOURCE_ALIASES.get(
+            resource_class, resource_class
+        )
         if resource_class not in RESOURCE_LIMIT_CAPS:
             raise ValueError(f"{task_id} has unknown resource class")
 
@@ -274,6 +279,7 @@ def build_plan(
     source_rhythm_qc_path,
     cache_key,
     tasks,
+    job_output_root=None,
     output_root=None,
     resource_limits=None,
 ):
@@ -291,7 +297,10 @@ def build_plan(
         output_root
         or f"output/{job_id}/source-composition/{cache_key}",
     )
-    job_output = (root / "output" / job_id).resolve()
+    job_output = resolve_path(
+        root,
+        job_output_root or f"output/{job_id}",
+    )
     if not is_within(bundle_root, job_output):
         raise ValueError("composition output root must stay inside the job output")
     planned_tasks = _validate_tasks(root, bundle_root, tasks)
@@ -303,6 +312,7 @@ def build_plan(
         "phase": "post_rhythm_composition",
         "policy": POLICY,
         "cache_key": cache_key,
+        "job_output_root": display_path(root, job_output),
         "source_rhythm": {
             "path": display_path(root, rhythm_path),
             "sha256": source_rhythm_sha256,
@@ -326,6 +336,7 @@ def build_plan(
         "schema_version": 1,
         "job_id": job_id,
         "stage": "source_blueprint",
+        "job_output_root": plan["job_output_root"],
         "coordinator_only_paths": [
             display_path(root, rhythm_path),
             display_path(root, qc_path),

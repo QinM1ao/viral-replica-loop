@@ -52,6 +52,35 @@ class PreSeedancePartCompilerTest(unittest.TestCase):
         )
         self.assertFalse((self.job_dir / ".pre_seedance_pack_staging").exists())
 
+    def test_compiles_through_logical_output_path_into_canonical_job_work(self):
+        from pre_seedance_part_compiler import compile_and_merge
+
+        canonical_work = self.root / "jobs" / "job-001" / "work"
+        canonical_work.mkdir(parents=True)
+        logical_output = self.root / "output" / "job-001"
+        logical_output.rmdir()
+        logical_output.symlink_to(canonical_work, target_is_directory=True)
+
+        def compile_one(part_id, packet_dir):
+            output = packet_dir / "seedance" / f"{part_id}.txt"
+            output.parent.mkdir(parents=True)
+            output.write_text("canonical", encoding="utf-8")
+            return {}
+
+        results = compile_and_merge(
+            logical_output,
+            ["part1"],
+            compile_one,
+        )
+
+        self.assertEqual([result.part_id for result in results], ["part1"])
+        self.assertEqual(
+            (canonical_work / "seedance" / "part1.txt").read_text(
+                encoding="utf-8"
+            ),
+            "canonical",
+        )
+
     def test_rejects_packet_output_collision_before_writing_final_outputs(self):
         from pre_seedance_part_compiler import compile_and_merge
 

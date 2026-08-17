@@ -1,7 +1,8 @@
 {
   "id": "toner",
   "scope": "category",
-  "usage_action": "pour or dispense watery toner into the palm and pat or press it onto the face",
+  "usage_action": "preserve the source-locked receiving location and dispensing mechanism when the watery toner can physically perform them, then preserve the source pat or press action",
+  "source_action_policy": "preserve_if_physically_compatible",
   "required_ref_roles": [
     "source_storyboard",
     "product_front",

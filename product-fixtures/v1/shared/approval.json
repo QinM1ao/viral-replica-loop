@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "approval_id": "fixture-zero-spend-replay-v1",
+  "scope": "non-client-fixture-validation",
+  "provider_submission_allowed": false,
+  "media_generation_allowed": false,
+  "paid_task_limit": 0,
+  "cost_limit_usd": 0,
+  "retry_authority": 0
+}

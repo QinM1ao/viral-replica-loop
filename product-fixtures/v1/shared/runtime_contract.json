@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "runtime_contract_id": "runtime-contract-product-fixture-v1",
+  "media_readers": [
+    {
+      "format": "yuv4mpeg2",
+      "mode": "read-only"
+    },
+    {
+      "format": "pcm_u8",
+      "mode": "read-only",
+      "sample_rate_hz": 8000,
+      "channels": 1
+    },
+    {
+      "format": "matroska_ffv1_pcm_u8",
+      "mode": "read-only"
+    },
+    {
+      "format": "wav_pcm_u8",
+      "mode": "read-only",
+      "sample_rate_hz": 8000,
+      "channels": 1
+    }
+  ],
+  "provider_mode": "sealed-offline-replay",
+  "network_allowed": false,
+  "provider_submission_allowed": false,
+  "media_generation_allowed": false
+}

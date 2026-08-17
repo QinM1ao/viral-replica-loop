@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "request_id": "pf-05-image-maker-zero-submit",
+  "provider": {
+    "name": "matpool_gpt_image_2",
+    "endpoint": "recorder://matpool-gpt-image-2/edit",
+    "model": "gpt-image-2"
+  },
+  "reference_order": [
+    "source_storyboard",
+    "product_front",
+    "product_open_mud",
+    "identity_role_host",
+    "identity_ref"
+  ],
+  "references": [
+    {
+      "role": "source_storyboard",
+      "path": "image/source_storyboard.png",
+      "sha256": "199337153cc084c24693534d46dddcd9f6c5141d902baf6df2de205bb2f063da"
+    },
+    {
+      "role": "product_front",
+      "path": "image/product_front.png",
+      "sha256": "12ec8bd4dbd5160a24cee5c86bfa6c169a81bbea1d31795a9f7c399076f2179d"
+    },
+    {
+      "role": "product_open_mud",
+      "path": "image/product_open.png",
+      "sha256": "4c365c4d7ecd9f6f7faad8ad13450b83a11c24a2ec8098808371dada16f79a49"
+    },
+    {
+      "role": "identity_role_host",
+      "path": "image/identity_ref.png",
+      "sha256": "65e697c5c17c6a1d53929ef45de5e929f7cb721c95df4a1a3730b9417f4489ff"
+    },
+    {
+      "role": "identity_ref",
+      "path": "image/identity_ref.png",
+      "sha256": "65e697c5c17c6a1d53929ef45de5e929f7cb721c95df4a1a3730b9417f4489ff"
+    }
+  ],
+  "parameters": {
+    "quality": "medium",
+    "resolution": "1K",
+    "size": "1024x1536",
+    "edit_scope": "source_locked+necessary_only"
+  },
+  "approval": {
+    "provider_submission_allowed": false,
+    "media_generation_allowed": false,
+    "paid_task_limit": 0,
+    "cost_limit_usd": 0,
+    "retry_authority": 0
+  },
+  "expires_at": "2099-12-31T23:59:59Z",
+  "recorder_controls": {
+    "mode": "offline_replay",
+    "network_access": false,
+    "real_submit": false,
+    "refresh_golden": false
+  }
+}
